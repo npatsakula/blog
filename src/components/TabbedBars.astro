@@ -1,0 +1,271 @@
+---
+// Tabbed grouped-bar chart built on Vega-Lite.
+// Each tab shows a different kernel shape; within a tab, bars are grouped by kernel,
+// colored by sequence length (T=256 / 2048 / 8192). Crashes (💥) render as a text
+// marker instead of a misleading zero bar.
+//
+// Usage in .mdx:
+//   <TabbedBars
+//     caption="..."
+//     tabs={[
+//       { id: 'attn_out', label: 'attn_out (·×8192×8192)', rows: [...] },
+//       ...
+//     ]}
+//   />
+//
+// Each row: { kernel: string, values: [number | 'crash', number | 'crash', number | 'crash'] }
+// values align with `series`, below.
+
+import type { Spec } from 'vega-lite';
+
+interface Row {
+	kernel: string;
+	values: (number | 'crash')[];
+}
+interface Tab {
+	id: string;
+	label: string;
+	rows: Row[];
+}
+interface Props {
+	tabs: Tab[];
+	seriesLabels: string[]; // legend labels for each value position
+	yTitle?: string;
+	caption?: string;
+}
+
+const { tabs, seriesLabels, caption } = Astro.props;
+
+// Flatten each tab into long-form rows: one record per kernel × series.
+// Crashed runs become tflops: null so Vega-Lite draws no bar (clean absence).
+const datasets: Record<string, { kernel: string; series: string; tflops: number | null }[]> = {};
+for (const tab of tabs) {
+	datasets[tab.id] = tab.rows.flatMap((row) =>
+		row.values.map((v, i) => ({
+			kernel: row.kernel,
+			series: seriesLabels[i],
+			tflops: v === 'crash' ? null : v,
+		})),
+	);
+}
+
+// Providers spread across the bottom X-axis; T becomes the colored dimension
+// with a light→dark ramp (short labels make a clean legend).
+const kernels = tabs[0]?.rows.map((r) => r.kernel) ?? [];
+const tRange = ['#cbd5e1', '#60a5fa', '#2337ff']; // 256 → 8192
+
+const baseSpec = (tabId: string): Spec => {
+	// Compute a little headroom above the tallest bar so the value labels
+	// don't get clipped at the top of the plot.
+	const vals = datasets[tabId]
+		.map((d) => d.tflops)
+		.filter((v): v is number => v != null);
+	const yMax = Math.max(...vals, 1) * 1.12;
+
+	return {
+		width: 'container',
+		height: 260,
+		data: { values: datasets[tabId] },
+		// Shared grouping: providers on the bottom X-axis, T clustered within each.
+		encoding: {
+			x: {
+				field: 'kernel',
+				type: 'nominal',
+				sort: kernels,
+				axis: {
+					title: null,
+					labelFontSize: 12,
+					labelAngle: 0,
+					labelPadding: 12,
+					domain: false,
+					ticks: false,
+					labelLimit: 180,
+				},
+			},
+			xOffset: { field: 'series', type: 'nominal', sort: seriesLabels },
+		},
+		layer: [
+			{
+				mark: { type: 'bar', tooltip: true, cornerRadiusEnd: 4 },
+				encoding: {
+					// No Y-axis chrome — scale stays for positioning, labels live on bars.
+					y: {
+						field: 'tflops',
+						type: 'quantitative',
+						axis: null,
+						scale: { domainMin: 0, domainMax: yMax },
+					},
+					color: {
+						field: 'series',
+						type: 'nominal',
+						legend: {
+							orient: 'top',
+							direction: 'horizontal',
+							title: null,
+							labelFontSize: 12,
+							symbolType: 'square',
+							symbolSize: 80,
+						},
+						scale: { domain: seriesLabels, range: tRange },
+					},
+				},
+			},
+			{
+				// Value labels sitting just above each bar. Null (crash) → no label.
+				mark: {
+					type: 'text',
+					dy: -8,
+					fontSize: 11,
+					fontWeight: 600,
+					color: '#475569',
+				},
+				encoding: {
+					y: {
+						field: 'tflops',
+						type: 'quantitative',
+						axis: null,
+						scale: { domainMin: 0, domainMax: yMax },
+					},
+					text: {
+						condition: {
+							test: 'datum.tflops !== null',
+							field: 'tflops',
+							type: 'quantitative',
+						},
+						value: '',
+					},
+				},
+			},
+		],
+		config: {
+			view: { stroke: null },
+			font: 'Atkinson',
+		},
+	};
+};
+---
+
+<figure class="tabbed-bars">
+	<div class="tabbed-bars__tabs" role="tablist">
+		{tabs.map((tab, i) => (
+			<button
+				class:list={["tabbed-bars__tab", { active: i === 0 }]}
+				role="tab"
+				data-tab={tab.id}
+				aria-selected={i === 0 ? 'true' : 'false'}
+			>
+				{tab.label}
+			</button>
+		))}
+	</div>
+	<div class="tabbed-bars__chart" data-vega-target></div>
+	{caption && <figcaption>{caption}</figcaption>}
+
+	<script type="application/json" data-all-specs set:html={JSON.stringify(
+		Object.fromEntries(tabs.map((t) => [t.id, baseSpec(t.id)]))
+	)} />
+</figure>
+
+<script>
+	const figures = document.querySelectorAll<HTMLElement>('.tabbed-bars');
+
+	for (const figure of figures) {
+		const target = figure.querySelector<HTMLElement>('[data-vega-target]');
+		const specsNode = figure.querySelector<HTMLScriptElement>('script[data-all-specs]');
+		const tabs = figure.querySelectorAll<HTMLButtonElement>('.tabbed-bars__tab');
+		if (!target || !specsNode) continue;
+
+		const specs = JSON.parse(specsNode.textContent ?? '{}') as Record<string, any>;
+		let currentView: any = null;
+
+		const render = async (tabId: string) => {
+			const { default: vegaEmbed } = await import('vega-embed');
+			const result = await vegaEmbed(target, specs[tabId], {
+				actions: false,
+				renderer: 'svg',
+			});
+			currentView = result;
+		};
+
+		const activate = (tabId: string) => {
+			for (const tab of tabs) {
+				const isActive = tab.dataset.tab === tabId;
+				tab.classList.toggle('active', isActive);
+				tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+			}
+			render(tabId);
+		};
+
+		for (const tab of tabs) {
+			tab.addEventListener('click', () => activate(tab.dataset.tab!));
+		}
+
+		// Render the first tab eagerly, rest lazy on first interaction.
+		const firstTab = tabs[0]?.dataset.tab;
+		if (firstTab) {
+			if ('IntersectionObserver' in window) {
+				const observer = new IntersectionObserver(
+					(entries) => {
+						for (const entry of entries) {
+							if (entry.isIntersecting) {
+								render(firstTab);
+								observer.disconnect();
+							}
+						}
+					},
+					{ rootMargin: '200px' },
+				);
+				observer.observe(figure);
+			} else {
+				render(firstTab);
+			}
+		}
+	}
+</script>
+
+<style>
+	.tabbed-bars {
+		margin: 2em 0;
+	}
+	.tabbed-bars__tabs {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.25rem;
+		border-bottom: 1px solid rgb(var(--gray-light));
+		margin-bottom: 1.25rem;
+	}
+	.tabbed-bars__tab {
+		appearance: none;
+		background: transparent;
+		border: none;
+		border-bottom: 2px solid transparent;
+		padding: 0.5rem 0.85rem;
+		font-family: var(--font-atkinson);
+		font-size: 0.9em;
+		color: rgb(var(--gray));
+		cursor: pointer;
+		transition: color 0.15s, border-color 0.15s;
+		margin-bottom: -1px;
+	}
+	.tabbed-bars__tab:hover {
+		color: rgb(var(--gray-dark));
+	}
+	.tabbed-bars__tab.active {
+		color: var(--accent);
+		border-bottom-color: var(--accent);
+		font-weight: 600;
+	}
+	.tabbed-bars__chart {
+		width: 100%;
+	}
+	.tabbed-bars__chart :global(svg) {
+		width: 100%;
+		height: auto;
+	}
+	.tabbed-bars figcaption {
+		text-align: center;
+		color: rgb(var(--gray));
+		font-size: 0.85em;
+		margin-top: 0.5em;
+	}
+</style>

@@ -1,0 +1,3 @@
+Place plot images exported from matplotlib / tensorboard / etc. here.
+
+Reference them in posts as:  ![alt](/images/<filename>)

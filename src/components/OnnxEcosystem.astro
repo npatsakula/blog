@@ -1,0 +1,216 @@
+---
+// Hub-and-spoke diagram: frameworks → ONNX → runtimes ("train anywhere, run anywhere").
+// Inline SVG; each connector terminates at the hub circle's edge (computed from the
+// line's angle) so arrows fan around the circumference instead of piling on the center.
+
+const frameworks = ['PyTorch', 'TensorFlow', 'JAX', 'Scikit-learn'];
+const runtimes = [
+	{ name: 'ONNX Runtime', featured: false },
+	{ name: 'Svod', featured: true },
+	{ name: 'OpenVINO', featured: false },
+	{ name: 'TensorRT', featured: false },
+];
+
+// SVG layout
+const W = 720;
+const H = 360;
+const hubX = W / 2;
+const hubY = H / 2;
+const hubR = 46;
+const leftX = 90;
+const rightX = W - 90;
+
+// Evenly space n nodes vertically around the center.
+const sideY = (i: number, n: number) => {
+	const gap = (H - 80) / Math.max(n, 1);
+	return 40 + gap / 2 + i * gap;
+};
+
+// Point where the line from (nx, ny) meets the hub circle — so connectors
+// terminate at the edge instead of the center, fanning around the circle.
+const hubEdge = (nx: number, ny: number) => {
+	const dx = hubX - nx;
+	const dy = hubY - ny;
+	const dist = Math.hypot(dx, dy);
+	return { x: hubX - (dx / dist) * hubR, y: hubY - (dy / dist) * hubR };
+};
+
+// Smooth horizontal-tangent cubic Bézier between two points.
+const curve = (x1: number, y1: number, x2: number, y2: number) => {
+	const cx = (x1 + x2) / 2;
+	return `M ${x1} ${y1} C ${cx} ${y1}, ${cx} ${y2}, ${x2} ${y2}`;
+};
+
+// Pre-compute connector paths.
+const leftPaths = frameworks.map((_, i) => {
+	const y = sideY(i, frameworks.length);
+	const edge = hubEdge(leftX + 78, y);
+	return { d: curve(leftX + 78, y, edge.x, edge.y) };
+});
+const rightPaths = runtimes.map((_, i) => {
+	const y = sideY(i, runtimes.length);
+	const edge = hubEdge(rightX - 78, y);
+	return { d: curve(edge.x, edge.y, rightX - 78, y) };
+});
+---
+
+<figure class="onnx-ecosystem">
+	<svg
+		viewBox={`0 0 ${W} ${H}`}
+		role="img"
+		aria-label="Диаграмма экосистемы ONNX: фреймворки обучения слева преобразуются в формат ONNX в центре, затем запускаются на рантаймах справа, включая Svod."
+	>
+		<defs>
+			<marker
+				id="arrowhead"
+				markerWidth="7"
+				markerHeight="7"
+				refX="5.5"
+				refY="3"
+				orient="auto"
+			>
+				<path d="M0,0 L6,3 L0,6 Z" fill="rgb(var(--gray))" />
+			</marker>
+		</defs>
+
+		<!-- connectors -->
+		{
+			leftPaths.map((p) => (
+				<path class="arrow" d={p.d} marker-end="url(#arrowhead)" />
+			))
+		}
+		{
+			rightPaths.map((p) => (
+				<path class="arrow" d={p.d} marker-end="url(#arrowhead)" />
+			))
+		}
+
+		<!-- hub -->
+		<circle class="hub" cx={hubX} cy={hubY} r={hubR} />
+		<text
+			class="hub-label"
+			x={hubX}
+			y={hubY}
+			text-anchor="middle"
+			dominant-baseline="central">ONNX</text>
+
+		<!-- framework nodes (left) -->
+		{
+			frameworks.map((name, i) => {
+				const y = sideY(i, frameworks.length);
+				return (
+					<g class="node">
+						<rect
+							class="node-rect"
+							x={leftX - 78}
+							y={y - 18}
+							width="156"
+							height="36"
+							rx="8"
+						/>
+						<text
+							class="node-label"
+							x={leftX}
+							y={y}
+							text-anchor="middle"
+							dominant-baseline="central">{name}</text>
+					</g>
+				);
+			})
+		}
+
+		<!-- runtime nodes (right) -->
+		{
+			runtimes.map(({ name, featured }, i) => {
+				const y = sideY(i, runtimes.length);
+				return (
+					<g class="node">
+						<rect
+							class:list={["node-rect", { featured }]}
+							x={rightX - 78}
+							y={y - 18}
+							width="156"
+							height="36"
+							rx="8"
+						/>
+						<text
+							class:list={["node-label", { featured }]}
+							x={rightX}
+							y={y}
+							text-anchor="middle"
+							dominant-baseline="central">{name}</text>
+					</g>
+				);
+			})
+		}
+	</svg>
+</figure>
+
+<style>
+	.onnx-ecosystem {
+		margin: 2em 0;
+	}
+	.onnx-ecosystem svg {
+		width: 100%;
+		height: auto;
+		display: block;
+	}
+
+	/* connectors — smooth curves terminating at the hub edge */
+	.arrow {
+		stroke: rgb(var(--gray), 55%);
+		stroke-width: 1.5;
+		fill: none;
+	}
+
+	/* hub */
+	.hub {
+		fill: var(--accent);
+		stroke: none;
+	}
+	.hub-label {
+		fill: #fff;
+		font-family: var(--font-atkinson);
+		font-size: 17px;
+		font-weight: 700;
+	}
+
+	/* side nodes */
+	.node-rect {
+		fill: #fff;
+		stroke: rgb(var(--gray-light));
+		stroke-width: 1.5;
+	}
+	.node-label {
+		fill: rgb(var(--gray-dark));
+		font-family: var(--font-atkinson);
+		font-size: 13px;
+		font-weight: 400;
+	}
+
+	/* Svod — highlighted to match the accent */
+	.node-rect.featured {
+		stroke: var(--accent);
+		stroke-width: 2;
+	}
+	.node-label.featured {
+		fill: var(--accent);
+		font-weight: 700;
+	}
+
+	@media (prefers-color-scheme: dark) {
+		.node-rect {
+			fill: rgb(var(--gray-dark));
+			stroke: rgb(var(--gray));
+		}
+		.node-label {
+			fill: #fff;
+		}
+		.node-rect.featured {
+			fill: rgb(var(--accent-dark));
+		}
+		.node-label.featured {
+			fill: #fff;
+		}
+	}
+</style>

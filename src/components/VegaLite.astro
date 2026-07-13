@@ -1,0 +1,77 @@
+---
+// Reusable Vega-Lite chart component.
+//
+// Usage in an .mdx post:
+//   import VegaLite from '../../components/VegaLite.astro';
+//   <VegaLite spec={{ ...your vega-lite spec... }} />
+//
+// The spec is serialized into the page and rendered client-side by vega-embed.
+// Charts only initialize when scrolled into view (IntersectionObserver), so
+// off-screen charts add no startup cost.
+
+import type { Spec } from 'vega-lite';
+
+interface Props {
+	spec: Spec;
+}
+
+const { spec } = Astro.props;
+const id = `vega-${Math.random().toString(36).slice(2, 9)}`;
+---
+
+<div class="vega-chart" id={id}>
+	<div class="vega-chart__container" data-vega-target></div>
+	<noscript>This chart requires JavaScript to render.</noscript>
+	<script type="application/json" data-vega-spec set:html={JSON.stringify(spec)} />
+</div>
+
+<script>
+	const containers = document.querySelectorAll<HTMLElement>('.vega-chart');
+
+	for (const chart of containers) {
+		const target = chart.querySelector<HTMLElement>('[data-vega-target]');
+		const specNode = chart.querySelector<HTMLScriptElement>('script[data-vega-spec]');
+		if (!target || !specNode) continue;
+
+		const spec = JSON.parse(specNode.textContent ?? '{}');
+
+		const render = async () => {
+			const { default: vegaEmbed } = await import('vega-embed');
+			await vegaEmbed(target, spec, {
+				actions: false, // hide the "export" toolbar — comment out to re-enable
+				renderer: 'svg',
+			});
+		};
+
+		// Lazy-init: render when the chart scrolls into view.
+		if ('IntersectionObserver' in window) {
+			const observer = new IntersectionObserver(
+				(entries) => {
+					for (const entry of entries) {
+						if (entry.isIntersecting) {
+							render();
+							observer.disconnect();
+						}
+					}
+				},
+				{ rootMargin: '200px' },
+			);
+			observer.observe(chart);
+		} else {
+			render();
+		}
+	}
+</script>
+
+<style>
+	.vega-chart {
+		margin: 2em 0;
+	}
+	.vega-chart__container {
+		width: 100%;
+	}
+	.vega-chart__container :global(svg) {
+		max-width: 100%;
+		height: auto;
+	}
+</style>
