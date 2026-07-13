@@ -6,7 +6,12 @@ import { defineConfig, fontProviders } from 'astro/config';
 
 // https://astro.build/config
 export default defineConfig({
-	site: 'https://example.com',
+	// GitHub Pages serves project sites at <user>.github.io/<repo>/.
+	// `site` + `base` make all internal links, assets, sitemap, and RSS
+	// resolve under that subpath. When you move to a custom domain later,
+	// drop `base` and point `site` at the domain.
+	site: 'https://npatsakula.github.io',
+	base: '/blog',
 	integrations: [mdx(), sitemap()],
 	fonts: [
 		{
