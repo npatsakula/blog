@@ -1,6 +1,6 @@
-# Svod Blog
+# Nikita Patsakula — Blog
 
-Technical blog for the [Svod](https://github.com/npatsakula/svod) tensor framework, built with [Astro](https://astro.build).
+Personal blog of Nikita Patsakula (engineering, tensor compute, ML infrastructure), built with [Astro](https://astro.build).
 
 ## Commands
 
@@ -11,9 +11,21 @@ Technical blog for the [Svod](https://github.com/npatsakula/svod) tensor framewo
 | `npm run build`   | Build production site to `./dist/`           |
 | `npm run preview` | Preview the production build locally         |
 
+## Internationalization
+
+The site serves two locales, Russian (`ru`, default) and English (`en`), with symmetric routing: every page lives under `/<base>/<locale>/...`, and `/` redirects to `/ru/`.
+
+- **Pages** live under `src/pages/[locale]/` and emit one route per locale via `getStaticPaths`.
+- **Posts** live in `src/content/blog/<locale>/`; a post's file path is its `id` (e.g. `ru/my-post`), and each route renders only the posts whose `id` starts with that locale.
+- **UI strings** (site description, nav labels) are centralized in `src/i18n/ui.ts`; add a key to both locale blocks together.
+- **RSS** is per-locale: `/<base>/<locale>/rss.xml`.
+- The header has a `RU | EN` switcher that swaps the locale segment while keeping the rest of the path.
+
+To add a post, create a `.md`/`.mdx` file in the right locale folder (e.g. `src/content/blog/ru/`); drop a translated copy under `src/content/blog/en/` for the English version.
+
 ## Writing a post
 
-Create a `.md` or `.mdx` file in `src/content/blog/`. Frontmatter is validated against the schema in `src/content.config.ts` (`title`, `description`, `pubDate`, optional `updatedDate`/`heroImage`).
+Create a `.md` or `.mdx` file in `src/content/blog/<locale>/` (e.g. `src/content/blog/ru/`). Frontmatter is validated against the schema in `src/content.config.ts` (`title`, `description`, `pubDate`, optional `updatedDate`/`heroImage`).
 
 Use `.mdx` when you need the visualization components:
 

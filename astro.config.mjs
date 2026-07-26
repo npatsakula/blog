@@ -12,7 +12,22 @@ export default defineConfig({
 	// drop `base` and point `site` at the domain.
 	site: 'https://npatsakula.github.io',
 	base: '/blog',
-	integrations: [mdx(), sitemap()],
+	i18n: {
+		// Russian is the primary locale. `prefixDefaultLocale: true` gives
+		// symmetric `/ru/` + `/en/` routing under base, so every page lives at
+		// `/<base>/<locale>/...` and a single `[locale]/...` route structure
+		// serves both languages. `/` redirects to `/ru/`.
+		defaultLocale: 'ru',
+		locales: ['ru', 'en'],
+		routing: { prefixDefaultLocale: true, redirectToDefaultLocale: true },
+		// Show the Russian version when an English translation is missing.
+		fallback: { en: 'ru' },
+	},
+	integrations: [
+		mdx(),
+		// Emit hreflang alternates between ru/en so search engines link siblings.
+		sitemap({ i18n: { defaultLocale: 'ru', locales: { ru: 'ru-RU', en: 'en-US' } } }),
+	],
 	fonts: [
 		{
 			provider: fontProviders.local(),

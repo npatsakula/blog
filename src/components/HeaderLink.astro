@@ -1,14 +1,22 @@
 ---
 import type { HTMLAttributes } from 'astro/types';
+import { normalizeLocale } from '../i18n/ui';
 
 type Props = HTMLAttributes<'a'>;
 
 const { href, class: className, ...props } = Astro.props;
-const base = import.meta.env.BASE_URL;
-// Resolve the href against the configured base path.
-const resolvedHref = href === '/' ? base : `${base}${href}`;
-// Strip the base to compare against the route path.
-const pathname = Astro.url.pathname.replace(base, '/');
+const base = `${import.meta.env.BASE_URL}/`.replace(/\/+$/, '/');
+// Locale of the current page — used to scope every internal nav link.
+const locale = normalizeLocale(Astro.currentLocale);
+// Resolve the href against base and the current locale, so e.g. `/about`
+// becomes `/blog/ru/about/`.
+const resolvedHref =
+	href === '/' ? `${base}${locale}/` : `${base}${locale}${href}`;
+// Strip base + locale to compare against the route path for active state.
+const pathname = Astro.url.pathname.replace(base, '/').replace(
+	new RegExp(`^/${locale}(?=/|$)`),
+	'',
+);
 const subpath = pathname.match(/[^\/]+/g);
 const isActive = href === pathname || href === '/' + (subpath?.[0] || '');
 ---

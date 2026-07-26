@@ -1,0 +1,29 @@
+---
+import { getCollection, render } from 'astro:content';
+import BlogPost from '../../../layouts/BlogPost.astro';
+import { locales, type Locale } from '../../../i18n/ui';
+
+export async function getStaticPaths() {
+	// Build one route per post per locale: each post's id already encodes its
+	// locale as a prefix (e.g. `ru/<slug>`), so we split it off here.
+	const posts = await getCollection('blog');
+	return posts
+		.map((post) => {
+			const [locale, ...rest] = post.id.split('/');
+			return { locale, slug: rest.join('/'), post };
+		})
+		.filter(({ locale, slug }) => locales.includes(locale as Locale) && slug)
+		.map(({ locale, slug, post }) => ({
+			params: { locale, slug },
+			props: { post },
+		}));
+}
+
+const { post } = Astro.props as { post: Awaited<ReturnType<typeof getCollection>>[number] };
+const { locale } = Astro.params as { locale: Locale };
+const { Content } = await render(post);
+---
+
+<BlogPost {...post.data} locale={locale}>
+	<Content />
+</BlogPost>

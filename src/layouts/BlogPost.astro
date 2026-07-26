@@ -6,12 +6,13 @@ import Footer from '../components/Footer.astro';
 import FormattedDate from '../components/FormattedDate.astro';
 import Header from '../components/Header.astro';
 
-type Props = CollectionEntry<'blog'>['data'];
+type Props = CollectionEntry<'blog'>['data'] & { locale?: string };
 
-const { title, description, pubDate, updatedDate, heroImage } = Astro.props;
+const { title, description, pubDate, updatedDate, heroImage, locale } =
+	Astro.props;
 ---
 
-<html lang="en">
+<html lang={locale ?? 'ru'}>
 	<head>
 		<BaseHead title={title} description={description} />
 		<style>

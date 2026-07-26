@@ -1,22 +1,30 @@
 ---
 import { Image } from 'astro:assets';
 import { getCollection } from 'astro:content';
-import BaseHead from '../../components/BaseHead.astro';
-import Footer from '../../components/Footer.astro';
-import FormattedDate from '../../components/FormattedDate.astro';
-import Header from '../../components/Header.astro';
-import { SITE_DESCRIPTION, SITE_TITLE } from '../../consts';
+import BaseHead from '../../../components/BaseHead.astro';
+import Footer from '../../../components/Footer.astro';
+import FormattedDate from '../../../components/FormattedDate.astro';
+import Header from '../../../components/Header.astro';
+import { SITE_TITLE } from '../../../consts';
+import { getUI, locales, type Locale } from '../../../i18n/ui';
 
-const posts = (await getCollection('blog')).sort(
-	(a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf(),
-);
+export function getStaticPaths() {
+	return locales.map((locale) => ({ params: { locale } }));
+}
+
+const { locale } = Astro.params as { locale: Locale };
 const base = `${import.meta.env.BASE_URL}/`.replace(/\/+$/, '/');
+const t = getUI(locale);
+// Filter to this locale's posts (ids look like `ru/<slug>`).
+const posts = (await getCollection('blog', ({ id }) =>
+	id.startsWith(`${locale}/`),
+)).sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang={locale}>
 	<head>
-		<BaseHead title={SITE_TITLE} description={SITE_DESCRIPTION} />
+		<BaseHead title={SITE_TITLE} description={t.siteDescription} />
 		<style>
 			main {
 				width: 960px;
@@ -93,19 +101,28 @@ const base = `${import.meta.env.BASE_URL}/`.replace(/\/+$/, '/');
 			<section>
 				<ul>
 					{
-						posts.map((post) => (
-							<li>
-								<a href={`${base}blog/${post.id}/`}>
-									{post.data.heroImage && (
-										<Image width={720} height={360} src={post.data.heroImage} alt="" />
-									)}
-									<h4 class="title">{post.data.title}</h4>
-									<p class="date">
-										<FormattedDate date={post.data.pubDate} />
-									</p>
-								</a>
-							</li>
-						))
+						posts.map((post) => {
+							// Drop the leading `<locale>/` from the id for the URL slug.
+							const slug = post.id.replace(/^[^/]+\//, '');
+							return (
+								<li>
+									<a href={`${base}${locale}/blog/${slug}/`}>
+										{post.data.heroImage && (
+											<Image
+												width={720}
+												height={360}
+												src={post.data.heroImage}
+												alt=""
+											/>
+										)}
+										<h4 class="title">{post.data.title}</h4>
+										<p class="date">
+											<FormattedDate date={post.data.pubDate} />
+										</p>
+									</a>
+								</li>
+							);
+						})
 					}
 				</ul>
 			</section>

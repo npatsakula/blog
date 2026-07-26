@@ -4,6 +4,7 @@
 import '../styles/global.css';
 import type { ImageMetadata } from 'astro';
 import { SITE_TITLE } from '../consts';
+import { normalizeLocale } from '../i18n/ui';
 import { Font } from 'astro:assets';
 
 interface Props {
@@ -15,6 +16,8 @@ interface Props {
 const canonicalURL = new URL(Astro.url.pathname, Astro.site);
 // Normalize base to always end with a slash so path concatenation is clean.
 const base = `${import.meta.env.BASE_URL}/`.replace(/\/+$/, '/');
+// Per-locale RSS feed: /<base>/<locale>/rss.xml
+const locale = normalizeLocale(Astro.currentLocale);
 
 const { title, description, image } = Astro.props;
 ---
@@ -29,7 +32,7 @@ const { title, description, image } = Astro.props;
 	rel="alternate"
 	type="application/rss+xml"
 	title={SITE_TITLE}
-	href={new URL('rss.xml', Astro.site)}
+	href={new URL(`${base}${locale}/rss.xml`, Astro.site)}
 />
 <meta name="generator" content={Astro.generator} />
 

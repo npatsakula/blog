@@ -1,0 +1,118 @@
+---
+import BaseHead from '../../components/BaseHead.astro';
+import Footer from '../../components/Footer.astro';
+import Header from '../../components/Header.astro';
+import { AUTHOR } from '../../consts';
+import { getUI, locales, type Locale } from '../../i18n/ui';
+
+export function getStaticPaths() {
+	return locales.map((locale) => ({ params: { locale } }));
+}
+
+const { locale } = Astro.params as { locale: Locale };
+const t = getUI(locale);
+---
+
+<!doctype html>
+<html lang={locale}>
+	<head>
+		<BaseHead title={`${AUTHOR} — ${t.aboutTitle}`} description={t.aboutTitle} />
+	</head>
+	<body>
+		<Header />
+		<main class="prose">
+			{locale === 'ru' ? (
+				<>
+					<h1>{t.aboutTitle}</h1>
+					<p>
+						Меня зовут Никита Пацакула, я технический директор и инженер из
+						Москвы. Последние восемь лет я строю высоконагруженные
+						поисково-аналитические системы — в первую очередь на Rust.
+					</p>
+					<p>
+						Как CTO <a href="https://cognito.ru" target="_blank" rel="noopener"
+						>Когнито</a
+						> я отвечаю за технологический стек целиком: от подбора инфраструктуры
+						и найма команды до архитектуры пайплайнов сбора и анализа данных.
+						До этого в <a
+							href="https://www.kribrum.ru/"
+							target="_blank"
+							rel="noopener">Крибрум</a
+						> я разработал ядро поисково-аналитической системы, выполняющей
+						потоковый и офлайн-поиск по миллиардам документов, и руководил
+						созданием самого быстрого на тот момент открытого морфологического
+						анализатора для русского языка.
+					</p>
+					<p>
+						Я работаю на стыке системного программирования и ML: портировал
+						компилятор Rust и СУБД на архитектуры Эльбрус и RISC-V, добавлял
+						Flash Attention в форк GGML, писал кастомные ядра для GPU. Сейчас
+						развиваю <a
+							href="https://github.com/npatsakula/svod"
+							target="_blank"
+							rel="noopener">Svod</a
+						> — открытый тензорный фреймворк для запуска ML-моделей и LLM.
+					</p>
+					<p>
+						Здесь я пишу о тензорных вычислениях, инфраструктуре ML и инженерии
+						на Rust. Связаться со мной можно в <a
+							href="https://x.com/_ccer0z"
+							target="_blank"
+							rel="noopener">Twitter/X</a
+						> или на <a
+							href="https://github.com/npatsakula/"
+							target="_blank"
+							rel="noopener">GitHub</a
+						>.
+					</p>
+				</>
+			) : (
+				<>
+					<h1>{t.aboutTitle}</h1>
+					<p>
+						I'm Nikita Patsakula, a CTO and engineer based in Moscow. For the
+						last eight years I've been building high-load search and analytics
+						systems — mostly in Rust.
+					</p>
+					<p>
+						As CTO at <a href="https://cognito.ru" target="_blank" rel="noopener"
+						>Cognito</a
+						> I own the whole tech stack: infrastructure, hiring, and the
+						architecture of data collection and analytics pipelines. Before
+						that, at <a
+							href="https://www.kribrum.ru/"
+							target="_blank"
+							rel="noopener">Kribrum</a
+						>, I built the core of a search and analytics system doing streaming
+						and offline search across billions of documents, and led the team
+						that built the fastest open-source morphological analyzer for
+						Russian at the time.
+					</p>
+					<p>
+						I work at the intersection of systems programming and ML: I've
+						ported the Rust compiler and a DBMS to the Elbrus and RISC-V
+						architectures, added Flash Attention to a GGML fork, and written
+						custom GPU kernels. I currently develop <a
+							href="https://github.com/npatsakula/svod"
+							target="_blank"
+							rel="noopener">Svod</a
+						>, an open-source tensor framework for running ML models and LLMs.
+					</p>
+					<p>
+						This blog is where I write about tensor compute, ML infrastructure,
+						and engineering in Rust. Reach me on <a
+							href="https://x.com/_ccer0z"
+							target="_blank"
+							rel="noopener">Twitter/X</a
+						> or <a
+							href="https://github.com/npatsakula/"
+							target="_blank"
+							rel="noopener">GitHub</a
+						>.
+					</p>
+				</>
+			)}
+		</main>
+		<Footer />
+	</body>
+</html>
