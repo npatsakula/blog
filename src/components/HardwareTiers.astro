@@ -2,12 +2,14 @@
 // Three hardware tiers (Server / Consumer / Mobile) under a single Svod runtime.
 // Inline SVG in the spirit of OnnxEcosystem. The graphic carries only
 // non-translatable tokens (the "Svod" brand wordmark, vendor monograms, and
-// product model codes), so it needs no changes when the post is localized —
-// the surrounding prose and the `caption` prop do the translatable explaining.
+// product model codes); the surrounding prose and the `caption` prop do the
+// translatable explaining. The `aria-label` is localized via Astro.currentLocale.
 //
 // Identity: a uniform monogram badge per vendor (AMD / NV / QC / RK) plus the
 // iconic Apple glyph. Status is the single accent dimension: published entries
 // get the accent border + filled status dot, planned ones are muted + hollow.
+
+import { normalizeLocale } from '../i18n/ui';
 
 type IconName = 'server' | 'consumer' | 'mobile';
 type Status = 'published' | 'planned';
@@ -25,6 +27,11 @@ interface Props {
 }
 
 const { caption } = Astro.props;
+const locale = normalizeLocale(Astro.currentLocale);
+const ariaLabel =
+	locale === 'en'
+		? 'A single Svod runtime at the top spans three hardware tiers. Server accelerators: AMD MI300/MI350/MI450 (published), NVIDIA H100/H200/B200 (planned). Consumer: AMD Ryzen AI Halo (published), Apple M3/M4 and NVIDIA RTX 50 (planned). Embedded: Qualcomm Snapdragon X and RockChip RK3588 (planned).'
+		: 'Единый рантайм Svod на вершине охватывает три класса аппаратуры. Серверные ускорители: AMD MI300/MI350/MI450 (опубликовано), NVIDIA H100/H200/B200 (в планах). Пользовательские: AMD Ryzen AI Halo (опубликовано), Apple M3/M4 и NVIDIA RTX 50 (в планах). Встраиваемые: Qualcomm Snapdragon X и RockChip RK3588 (в планах).';
 
 const tiers: Tier[] = [
 	{
@@ -85,7 +92,7 @@ const applePath =
 	<svg
 		viewBox={`0 0 ${W} ${H}`}
 		role="img"
-		aria-label="Единый рантайм Svod на вершине охватывает три класса аппаратуры. Серверные ускорители: AMD MI300/MI350/MI450 (опубликовано), NVIDIA H100/H200/B200 (в планах). Пользовательские: AMD Ryzen AI Halo (опубликовано), Apple M3/M4 и NVIDIA RTX 50 (в планах). Встраиваемые: Qualcomm Snapdragon X и RockChip RK3588 (в планах)."
+		aria-label={ariaLabel}
 	>
 		<!-- Svod runtime rail -->
 		<rect class="rail" x={rail.x} y={rail.y} width={rail.w} height={rail.h} rx={rail.h / 2} />

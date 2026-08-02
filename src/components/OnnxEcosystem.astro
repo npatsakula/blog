@@ -3,6 +3,8 @@
 // Inline SVG; each connector terminates at the hub circle's edge (computed from the
 // line's angle) so arrows fan around the circumference instead of piling on the center.
 
+import { normalizeLocale } from '../i18n/ui';
+
 const frameworks = ['PyTorch', 'TensorFlow', 'JAX', 'Scikit-learn'];
 const runtimes = [
 	{ name: 'ONNX Runtime', featured: false },
@@ -52,13 +54,19 @@ const rightPaths = runtimes.map((_, i) => {
 	const edge = hubEdge(rightX - 78, y);
 	return { d: curve(edge.x, edge.y, rightX - 78, y) };
 });
+
+const locale = normalizeLocale(Astro.currentLocale);
+const ariaLabel =
+	locale === 'en'
+		? 'ONNX ecosystem diagram: training frameworks on the left convert to the ONNX format in the center, then run on the runtimes at the right, including Svod.'
+		: 'Диаграмма экосистемы ONNX: фреймворки обучения слева преобразуются в формат ONNX в центре, затем запускаются на рантаймах справа, включая Svod.';
 ---
 
 <figure class="onnx-ecosystem">
 	<svg
 		viewBox={`0 0 ${W} ${H}`}
 		role="img"
-		aria-label="Диаграмма экосистемы ONNX: фреймворки обучения слева преобразуются в формат ONNX в центре, затем запускаются на рантаймах справа, включая Svod."
+		aria-label={ariaLabel}
 	>
 		<defs>
 			<marker

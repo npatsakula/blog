@@ -1,0 +1,388 @@
+---
+title: 'Developing Svod'
+description: 'How we see the future of tensor compute, and how we are bringing it closer.'
+pubDate: '2026.08.03'
+---
+
+import VegaLite from '../../../components/VegaLite.astro';
+import OnnxEcosystem from '../../../components/OnnxEcosystem.astro';
+import TabbedBars from '../../../components/TabbedBars.astro';
+import HardwareTiers from '../../../components/HardwareTiers.astro';
+import ArchitectureCompare from '../../../components/ArchitectureCompare.astro';
+import SingleIrArchitecture from '../../../components/SingleIrArchitecture.astro';
+import LanguageHeatmap from '../../../components/LanguageHeatmap.astro';
+import LanguageMaintenanceChart from '../../../components/LanguageMaintenanceChart.astro';
+
+## Where we stand, and who we are
+
+Imagine you have an idea for an AI app or service you want to build and ship. You face a broad set of choices: which language to pick, which framework to reach for, how to orchestrate its components, and whether to run it on client devices, your own servers, or the cloud. The options run wide in every direction, but reality narrows it down to three things: development timelines, the availability of talent, and operating cost.
+
+You can even picture a multi-dimensional space where the market is slowly converging on the configuration that will suit most. So what's the status quo today? Python gave us a gentle learning curve and a steady supply of inexpensive developers, PyTorch managed to consolidate an ecosystem of ready-made solutions, NVIDIA crushed its competitors with software, and we ended up with clouds fit for production. This status quo reinforces itself in a spiral: once a solution hits critical mass, it only gets more attractive to adopt — through a better price, or a richer ecosystem. Is the resulting configuration actually any good? With all due respect to the individual technical achievements and the people behind them, I have to admit it could have been better: running Python for high-load or reliability-critical applications is genuinely hard; PyTorch carries years of design accretion and a heavy backward-compatibility burden; and the monopoly has certainly done the price of NVIDIA accelerators no favors.
+
+How do I know? For the last five years I've been building and running search and analytics systems: I wrote the core of a search engine that handles roughly 4% of global traffic, I built a speech recognition system for the media flowing through it, I led the creation of a semantic search system with NER extraction and cluster analysis on that same traffic, and together with my team I wrote the best morphological analyzer of its day for the scraped text. These systems ran across a real hardware zoo: some of the differences came down to history (older CPU generations, for instance, didn't support vector instructions of a given width), and some were deliberate design (certain model architectures couldn't put large server GPUs to good use, so we went with consumer ones).
+
+We couldn't afford hardware redundancy or downtime from service outages, so we had to reach for Rust instead of Python or C++. We were always trying to squeeze every last drop out of the hardware, so we modernized frameworks to push GPU utilization higher: I added Flash Attention support to our GGML fork ahead of upstream, I wrote several custom mega-kernels for our models, and so on.
+
+On our workloads, AMD GPUs come in 30% cheaper than NVIDIA GPUs, and for **some** tasks Apple accelerators work out four times cheaper than AMD.
+
+<LanguageMaintenanceChart caption="Python's cost of development climbs faster than the codebase: it's cheap to start (just glue libraries together into an app), but refactoring without a solid type system — and concurrency layered over the GIL (IPC, locks) — turns into a nightmare. With Rust the cost rises almost linearly: the language lets you express many contracts in the type system, and concurrency is native." />
+
+We chose Rust as a pragmatic compromise: for an experienced engineer, the pace of building a production application isn't materially different from working in Python or C++ — the compiler's static checks let us lean into borrowing and multithreading in ways C++ programmers instinctively avoid. Yes, there are languages with dependent types where the ownership model shields you even further from certain classes of bugs, but their ecosystems are far smaller. Rust, on the other hand, brings real advantages: static typing that catches swaths of small bugs at compile-time, parallelism out of the box, the borrow checker mentioned earlier, and an ever-growing community. Thanks to these qualities, Rust has — for the first time in a long while — become a second development language for Linux; Git is [also moving](https://www.zdnet.com/article/greg-kroah-hartman-linux-kernel-rust/) in its direction; and Android [uses Rust](https://blog.google/security/rust-in-android-move-fast-fix-things/) for mission-critical components.
+
+<LanguageHeatmap caption="Rust is strong on three of the four axes. The ML ecosystem is an honest gap — and exactly the one Svod fills; on development speed, it's on par with Python and C++ for an experienced engineer." />
+
+Nine months ago I started this project, combining my experience modernizing third-party frameworks with the design George Hotz conceived while building [Tinygrad](https://github.com/tinygrad/tinygrad), to make the best solution in the Rust ecosystem. I hope what's come of it so far is enough to shift the status quo when it comes to choosing the tech stack for future projects. Today I'll lay out what's been achieved so far, and what lies ahead.
+
+### On the Rust ecosystem
+
+
+Despite Rust's ecosystem maturing substantially over the past five years, one gaping hole remains — and it's absolutely critical for us: a good DL framework. One of my engineers, [Denis Zaletaev](https://github.com/mexus), gave a [talk](https://youtu.be/61D6guBgG7s?si=LgJhXtsydP3w5PVz) a few years ago on the DL ecosystem in Rust. Not much has changed since, so let me expand on the limitations that kept us from adopting any of these solutions as-is, or from investing our own time in pushing them forward.
+
+Many — like us on earlier projects — rely on bindings to LibTorch or ONNX Runtime, but that approach complicates deployment, drives up the cost of support and operations, and drives a wedge through introspection and profiling tooling. Others turn to native Rust implementations like Candle or Burn, which are worth digging into to get the lay of the land.
+
+#### Candle
+
+[Candle](https://github.com/huggingface/candle) aims to be a minimalist reimplementation of PyTorch, replicating its interface and some of its architectural choices. Its strong suit is the sheer number of implemented models, though the quality of those implementations — breadth of model configuration, and less often numerical correctness — sometimes falls short of what we'd require for production. Its weak spots are the limited headroom for adding hardware accelerators and parallel execution, plus generally low performance.
+
+Candle supports ONNX import, but between the performance and the operator support (including coverage of additional attributes and symbolic variables), we could never get our real production models to run.
+
+#### Burn
+
+[Burn](https://github.com/tracel-ai/burn) is a meta-framework that supports several tensor backends for executing models. Much of its model-description machinery leans on explicit typing, which buys you more safety at model-definition time, but makes instantiating a concrete model at runtime significantly harder and adds friction to reading the code.
+And because Burn sits as an extra abstraction layer, it makes debugging and modifying individual operations considerably more painful.
+
+Burn is also building its own kernel DSL, [CubeCL](https://github.com/tracel-ai/cubecl), with support for multiple hardware accelerators and the ability to write kernels directly in Rust. In my view they're heading the right direction on the DSL's design and capabilities, though some otherwise nice choices will fundamentally cap how close they can get to top-tier kernel performance.
+
+Burn supports ONNX import, but it works by transpiling the ONNX graph into Rust code at compile time — which puts a hard limit on hot-swapping models (you can still pull it off by implementing a JIT compiler and writing your own loading logic through the C API, but the ergonomics were a non-starter for me). And when we tried to onboard the models we actually use, we hit operator (or attribute) support gaps and numerical-correctness issues on certain platforms.
+
+## Architecture
+
+Popular frameworks are layered like a cake: several layers of intermediate representations, each one solving a real problem. One layer describes the set of tensor operations, another turns those operations into a graph, another applies optimizations, another maps the graph onto pre-written kernels, and yet another actually runs the computation.
+
+PyTorch has [7+ representations](https://docs.pytorch.org/docs/stable/user_guide/torch_compiler/torch.compiler.html) (TorchDynamo, TorchIR / FX Graph, AOTAutograd, ATen IR, PrimIR, Dispatcher, and optionally TorchInductor) — some operating on Python, some on C++, some on MLIR, some on pre-compiled kernels. This setup solves real problems, but it's expensive to evolve (200+ engineers, bankrolled largely by Meta), painful for accelerator vendors to extend (which is exactly why PyTorch only really shines on NVIDIA hardware), and hard for users to keep current.
+
+<ArchitectureCompare caption="Every boundary between PyTorch's representations is another bridge for a vendor to cross, a break in the debugging context, and a support surface to maintain." />
+
+Replicating this setup by, say, rewriting PyTorch was never going to work: it's awfully hard to out-PyTorch PyTorch itself ([Candle](https://github.com/huggingface/candle) is trying that road, but the resources don't compare), and extending hardware support effectively would be a heavy lift — the cost of each operation varies from platform to platform, doing it well would demand an optimizer architecture that we as an industry haven't invented yet, and I'm certain the implementation complexity would be criminally high.
+
+This reasoning is what sent me looking for simpler architectural configurations. I focused on finding an architecture that would deliver acceptable performance across a wide range of hardware while still letting you squeeze performance out of a specific accelerator with ease.
+
+That search led me to a Python project that already does this — [Tinygrad](https://github.com/tinygrad/tinygrad), by George Hotz. A small project implementing a JIT-oriented DL framework with a simple optimizer, ONNX import, and a whole range of backends. Hotz uses a single intermediate representation across every stage of the framework, which keeps debugging transparent and makes the whole thing easy to reason about.
+
+### One UOp to rule them all
+
+How do you represent a computation graph that spans the entire lifecycle of a tensor? In Tinygrad, George uses an enum to encode the operation type and a variable-length list for the parameters. It's concise, but it demands extra validation at construction time. Rust sidesteps this problem entirely: its enum variants can be structs with named fields that guarantee the right number of arguments up front.
+
+To transform this graph you can reach for either plain Rust functions or the Svod Rewrite Engine: one derive macro generates extra metadata about the graph, which another derive macro then consumes to describe graph-transformation rules — all verified at compile time.
+
+<SingleIrArchitecture caption="A single representation (UOp) across all stages — no internal translation boundaries. The graph is debuggable end-to-end, and a vendor adds one backend instead of six bridges." />
+
+Adding a hardware accelerator isn't particularly hard either; it comes down to three steps:
+1. Add a code generator for the target platform: text generation works, as does programmatic generation if the backend allows it.
+2. Implement the buffer-management trait: allocation, deallocation, copying to host, and copying to other devices of the same type.
+3. Implement the kernel-launch trait for the platform: loading kernels onto the device, passing in buffers, and profiling.
+
+Svod ships tooling that makes it easy to add accelerators whose code looks C-like, or accelerators backed by LLVM — but that's not a fundamental restriction.
+
+## The compatibility layer
+
+Compatibility is a seductive word — it promises that a slice of the global DL ecosystem comes for free. I narrowed the problem to three axes:
+
+1. **API**. Modulo semantics, I kept it as close to PyTorch as I could. I even preserved named arguments with [`#[bon]`](https://github.com/elastio/bon), so engineers — and LLM agents — already fluent in PyTorch can pick it up without relearning a thing.
+2. **ONNX**. Any model that exports to `.onnx` should import as a set of input tensors, arguments, and output tensors, all computed on the target accelerator.
+3. **Binary compatibility**. A model from HuggingFace should download and run as-is — no detour through some exotic binary format — and, on supported systems, tensors should load straight off disk via (`mmap`).
+
+### ONNX
+
+<OnnxEcosystem />
+
+ONNX support is harder than it looks. [The standard defines 204 operations](https://github.com/onnx/onnx/blob/main/docs/Operators.md), many with multiple implementation versions, optional parameters, and symbolic arguments. To cover them all, a framework either implements each op individually or keeps a single universal representation of a computable operation that any complex op decomposes into. I chose the latter: 162 operators supported, deliberately excluding anything tied to training, raw text (e.g. `regex`), weight quantization, or signal processing.
+
+Measuring real coverage and spec conformance is its own problem, so ONNX ships 1361 test-data sets across its operators, plus nine lightweight models with reference values for verification. Svod's test harness runs the whole suite to track [parity](https://github.com/npatsakula/svod/blob/main/onnx/PARITY.md), and I plan to put Svod on the [ONNX Backend Scoreboard](https://onnx.ai/backend-scoreboard/index.html) shortly.
+
+<VegaLite
+	spec={{
+		width: 'container',
+		height: 320,
+		data: {
+			values: [
+				{ framework: 'Microsoft ONNX Runtime', supported: 187 },
+				{ framework: 'Google TensorFlow', supported: 185 },
+				{ framework: 'Intel OpenVINO', supported: 178 },
+				{ framework: 'Svod', supported: 162 },
+				{ framework: 'Intel OpenCV DNN', supported: 126 },
+				{ framework: 'Google JAX', supported: 71 },
+			],
+		},
+		layer: [
+			{
+				mark: {
+					type: 'bar',
+					tooltip: { content: 'data' },
+					cornerRadiusEnd: 6,
+				},
+			},
+			{
+				mark: {
+					type: 'text',
+					align: 'left',
+					baseline: 'middle',
+					dx: 8,
+					fontSize: 12,
+					color: '#64748b',
+				},
+				encoding: {
+					text: { field: 'supported', type: 'quantitative' },
+				},
+			},
+		],
+		encoding: {
+			y: {
+				field: 'framework',
+				type: 'nominal',
+				sort: { field: 'supported', order: 'descending' },
+				axis: {
+					title: null,
+					labelFontSize: 14,
+					labelPadding: 12,
+					domain: false,
+					ticks: false,
+				},
+			},
+			x: {
+				field: 'supported',
+				type: 'quantitative',
+				scale: { domain: [0, 210] },
+				axis: null,
+			},
+			color: {
+				condition: {
+					test: "datum.framework === 'Svod'",
+					value: '#2337ff',
+				},
+				value: '#cbd5e1',
+			},
+		},
+		config: {
+			view: { stroke: null },
+			font: 'Atkinson',
+		},
+	}}
+/>
+
+## Hardware support
+
+I split the hardware we want Svod to run on into three tiers: server accelerators, consumer accelerators, and embedded systems.
+
+That gives us three families of backends behind a single API:
+- **server** accelerators (AMD MI300/MI350/MI450, NVIDIA H100/H200/B200)
+- **consumer** (AMD Ryzen AI Halo, Apple M3/M4/M5, NVIDIA RTX 30/40/50)
+- **embedded** systems (Qualcomm Snapdragon X, RockChip RK3588)
+
+<HardwareTiers caption="A single Tensor API across the entire software lifecycle: the same graph runs on a server, a workstation, and an embedded device. Solid cards are already published; outlined ones are on the roadmap." />
+
+Covering all three tiers means we can describe and deploy models the same way at every stage of the software lifecycle — and it opens up major opportunities for running models directly on consumer hardware.
+
+So far I've only published the AMD accelerator backend. It's my target platform, and I don't have the spare time to clean up and release the rest yet — the project is built in my off hours, with no funding.
+
+### AMD
+
+#### Compilation
+
+To produce GPU executables, AMD's toolchain starts from [HIP](https://rocm.docs.amd.com/projects/HIP/en/latest/) (a C++ dialect), which `hipcc` lowers to LLVM IR, which LLVM then compiles into the target representation for the chosen GPU. I didn't want to depend on AMD's infrastructure here, so I generate the LLVM IR myself. That simplified debugging and codegen and shrank the Docker image we ship to users.
+
+#### Launch
+
+At runtime, AMD leans on the HIP/ROCr stack — another dependency I wanted to avoid. So I ported the relevant pieces of ROCr directly into Svod and, along the way, implemented kernel launch fusion (borrowing ideas from AMD [MIGraphX](https://github.com/ROCm/AMDMIGraphX)), which made launching large compute graphs far less painful.
+
+Over time I plan to finish a userspace driver that launches executables entirely without AMD's infrastructure, leaving the software fully self-contained and substantially easier to operate.
+
+#### Profiling
+
+For profiling, AMD uses [`rocprof`](https://rocm.docs.amd.com/projects/rocprofiler-sdk/en/latest/), which exposes per-operation-type counters — how long a kernel stalled waiting on data, how well it hit cache, how saturated the matrix engine was, and so on. The kernel launch engine turned out well enough that I extended it to pull these counters directly, which made `rocprof` unnecessary.
+
+## Tiled Kernels
+
+For a long time, conventional wisdom held that writing your own kernels was bad practice: given a solid GPU-capable tensor framework and a problem that maps cleanly onto tensor math, all you needed for a good result was to express the problem in the framework.
+
+Reality, of course, is more tangled:
+1. Every tensor framework has architectural quirks that can cap its performance on your particular problem.
+2. Even when a framework performs well on your task, a tangible performance gap remains — one you cannot close from inside the framework.
+
+That is why every serious framework now lets you drop custom kernels into the compute graph. The way we write them has evolved, too: first everyone wrote CUDA, then [Triton](https://github.com/triton-lang/triton) arrived, and today [CuTile](https://developer.nvidia.com/blog/automating-gpu-kernel-translation-with-ai-agents-cutile-python-to-cutile-jl/) sits at the frontier. But through all of this evolution, one thing has not changed: custom kernels live in a different representation than the rest of the framework, making introspection and whole-application performance debugging painful at best, and often impossible.
+
+Svod takes a different path. By combining ideas from [HazyResearch HipKittens](https://github.com/HazyResearch/HipKittens) and NVIDIA CuTile, I built a dialect that lets you write high-performance kernels in the same terms as the rest of the framework, reaching down to specific hardware features through intrinsics when you need them. The design goal was direct: keep it simple and safe enough that even an LLM agent could write a mega-kernel on its own, or with minimal human hand-holding.
+
+The resulting DSL produces kernels no slower than the implementations in [hipBLASLt](https://github.com/ROCm/rocm-libraries) or composed_kernels — with far less code. The minimal matmul kernel makes the point: a handful of lines, and it still drives the GPU's matrix accelerator (MFMA on CDNA, WMMA on RDNA).
+
+```rust
+fn micro_matmul(ker: &Kernel) -> Arc<UOp> {
+    let w = ker.warp();
+    // 64×64 tiles: A and B in bf16, accumulator C in f32.
+    let a = ker.rt((64, 64), DType::BFloat16, Row, RT_16X16);
+    let b = ker.rt((64, 64), DType::BFloat16, Col, RT_16X16);
+    let c = ker.rt((64, 64), DType::Float32, Col, RT_16X16);
+    // One mma_ab call → compiles to a single matrix-core instruction.
+    let out = w.mma_ab(w.zero(c), &a, &b);
+    ker.finish(1)
+}
+```
+
+I implemented a set of ML and data-analysis primitives, with the following results:
+
+<TabbedBars
+	seriesLabels={['256', '2048', '8192']}
+	tabs={[
+		{
+			id: 'attn_out',
+			label: 'attn_out · T×8192×8192',
+			rows: [
+				{ kernel: 'hk::micro_tk (HK port)', values: [106, 626, 631] },
+				{ kernel: 'hipBLASLt (VF)', values: ['crash', 319, 436] },
+				{ kernel: 'generic (BEAM)', values: [108, 169, 168] },
+			],
+		},
+		{
+			id: 'ffn_up',
+			label: 'ffn_up · T×28672×8192',
+			rows: [
+				{ kernel: 'hk::micro_tk (HK port)', values: [268, 593, 596] },
+				{ kernel: 'hipBLASLt (VF)', values: ['crash', 313, 441] },
+				{ kernel: 'generic (BEAM)', values: [138, 172, 170] },
+			],
+		},
+		{
+			id: 'ffn_down',
+			label: 'ffn_down · T×8192×28672',
+			rows: [
+				{ kernel: 'hk::micro_tk (HK port)', values: [79, 565, 495] },
+				{ kernel: 'hipBLASLt (VF)', values: ['crash', 294, 432] },
+				{ kernel: 'generic (BEAM)', values: [88, 151, 150] },
+			],
+		},
+	]}
+	caption="These three shapes are the core matmuls of a transformer: attn_out is the attention output projection (d×d); ffn_up and ffn_down are the up/gate- and down-projections of the FFN (expansion into the hidden dim 28672 and return to d=8192)."
+/>
+
+## Models and pipelines
+
+A tensor framework, no matter how good, isn't useful to anyone on its own. What the community actually wants is an ecosystem of implemented models and the plumbing around them — the kind that lets you snap ready-made systems together from building blocks. That's exactly why [`transformers`](https://github.com/huggingface/transformers) is so popular, and exactly why `transformers` ships `pipelines`.
+
+With that in mind, I built models and pre/post-processing infrastructure directly into the project:
+
+1. I picked a few areas I expect ML engineers to actually need: text work (embedding generation, reranking, token classification), image work (object detection, segmentation, embeddings), and audio work (VAD, transcription). For each, I ported the SOTA or widely-adopted models. They stand on their own for building RAG systems, LLM harnesses, speech-analytics pipelines, and so on.
+2. I added traits and structs that chain several models into a single pipeline, hiding the interaction complexity behind one surface. This also lets you generalize the invocation logic, which makes swapping in a different model down the road far less painful.
+
+For instance, a speech-analytics pipeline is built from the [GigaAM](https://github.com/salute-developers/GigaAM) model and the [FireRedVAD](https://github.com/FireRedTeam/FireRedVAD) segmenter in a handful of lines:
+
+```rust
+let model = GigaAm::from_hub_with_revision("vpermilp/GigaAM-v3", "ctc")?;
+let bounds = EncoderBounds {
+    sample_rate: model.config.sample_rate as u32,
+    hop_length: model.config.hop_length,
+    subsampling_factor: model.config.subsampling_factor,
+    max_mel_frames: model.config.max_mel_frames,
+    recommended_target_secs: model.recommended_chunk_secs(),
+};
+let splitter = FireRedVadSplitter::from_hub(&bounds)?;
+let mut asr = Asr::assemble(splitter, |mc| GigaAmTranscriber::new(model, options, mc))?;
+let result = asr.transcribe_default(&waveform)?;
+```
+
+Because the Svod Tensor API mirrors PyTorch's so closely, I could port models almost automatically with an LLM. Given a well-built test loop (including diffs against reference values) and a sharp prompt, GLM 5.2 handles model migration and the follow-up performance tuning almost every time. Going forward, I plan to package a few LLM Skills to make porting straightforward for anyone.
+
+That same API similarity keeps the model-description code in the same ballpark as PyTorch.
+
+<VegaLite
+	spec={{
+		width: 'container',
+		height: 280,
+		data: {
+			values: [
+				{ model: 'GigaAM', implementation: 'Svod (Rust)', loc: 2304 },
+				{ model: 'GigaAM', implementation: 'PyTorch (reference)', loc: 1536 },
+				{ model: 'Qwen3-Embedding', implementation: 'Svod (Rust)', loc: 709 },
+				{ model: 'Qwen3-Embedding', implementation: 'PyTorch (reference)', loc: 367 },
+				{ model: 'BGE-M3', implementation: 'Svod (Rust)', loc: 1079 },
+				{ model: 'BGE-M3', implementation: 'PyTorch (reference)', loc: 882 },
+			],
+		},
+		encoding: {
+			x: {
+				field: 'model',
+				type: 'nominal',
+				axis: { title: null, labelFontSize: 13, labelPadding: 10, labelAngle: 0, domain: false, ticks: false },
+			},
+			y: {
+				field: 'loc',
+				type: 'quantitative',
+				axis: { title: 'LOC', titleFontSize: 12, labelFontSize: 11 },
+			},
+			color: {
+				field: 'implementation',
+				type: 'nominal',
+				legend: {
+					orient: 'top',
+					direction: 'horizontal',
+					title: null,
+					labelFontSize: 12,
+					symbolType: 'square',
+					symbolSize: 80,
+				},
+				scale: {
+					domain: ['Svod (Rust)', 'PyTorch (reference)'],
+					range: ['#2337ff', '#cbd5e1'],
+				},
+			},
+			xOffset: { field: 'implementation', type: 'nominal' },
+		},
+		layer: [
+			{
+				mark: { type: 'bar', tooltip: true, cornerRadiusEnd: 4 },
+			},
+			{
+				mark: { type: 'text', dy: -8, fontSize: 11, fontWeight: 600, color: '#475569' },
+				encoding: { text: { field: 'loc', type: 'quantitative' } },
+			},
+		],
+		config: {
+			view: { stroke: null },
+			font: 'Atkinson',
+		},
+	}}
+/>
+
+For the comparison to be fair, I counted only code specific to the model itself (architecture + inference plumbing).
+However, the comparison also includes Svod's own non-separable backbone implementations
+ (XLM-RoBERTa for BGE-M3 — 616 LOC, Qwen3-decoder — 630 LOC), whereas the Python side imports them from
+ `transformers`/`sentence-transformers`, which is not accounted for in these numbers. Beyond backbones,
+ the Python reference also imports inference plumbing (transpilation into JIT, loaders), which likewise fell outside the count.
+ Under this definition of "model code," Svod lands at **1.2–1.9×** the reference — a comparable volume for a from-scratch implementation in Rust.
+
+## The bottom line...
+
+The project is closing in on a release. I ended up with roughly 83 KLOC of framework code and about 177 KLOC of tests and infrastructure. Right now it covers several CPUs (x86, ARM, RISC-V, IBM), a few operating systems (Linux, macOS), and a handful of AMD accelerators (RDNA 3.5, RDNA 4, CDNA 3). The line count runs higher than Tinygrad's — the price of more explicit type handling, real documentation, and no crimes against the formatter.
+
+On any given model, Svod trails PyTorch and TensorFlow by a wide margin. But the debugging and profiling tooling is mature enough that you can pin down the bottleneck fast and ship a fix tuned to the hardware in front of you via the Svod TK DSL. When I added GigaAM support, it took me under 600 lines of (still-unpublished) code to match what the reference implementation does on an RTX4090 under PyTorch.
+
+This isn't the framework's final form — but it's a solid reference point: put it in front of the community, gather feedback, and fix the things that'll be painful to change later.
+
+## Roadmap
+
+### AOT compilation
+
+Right now every model run optimizes and compiles the computation graph from scratch for each accelerator — on my target models that can take up to a minute, and potentially more. I want Svod to serialize the graph and its compiled kernels to a binary format it can deserialize back for instant launch.
+
+Beyond cold-start, AOT compilation also unlocks running Svod anywhere a compiler isn't available — say, in a WASM sandbox on the user's device.
+
+### A primitives library for data analysis
+
+Over the past couple of years we've seen a flood of papers and reference implementations of FA-like GPU algorithms for data analysis — [kmeans](https://en.wikipedia.org/wiki/K-means_clustering), [knn](https://en.wikipedia.org/wiki/K-nearest_neighbors_algorithm), [pca](https://en.wikipedia.org/wiki/Principal_component_analysis), [svd](https://en.wikipedia.org/wiki/Singular_value_decomposition), [dbscan](https://en.wikipedia.org/wiki/DBSCAN), [hdbscan](https://scikit-learn.org/stable/modules/generated/sklearn.cluster.HDBSCAN.html), [umap](https://arxiv.org/abs/1802.03426), [t-sne](https://en.wikipedia.org/wiki/T-distributed_stochastic_neighbor_embedding), and more. The landscape is fragmented — scattered across frameworks and DSLs, all NVIDIA-centric. I want a Svod TK implementation that runs across every platform I'm targeting and becomes the SOTA for each.
+
+### Formal verification
+
+We can already emit C code for a target platform — nothing stops us from emitting annotation-driven, verifiable code that catches out-of-bounds access, lossy casts, and the like.
+
+### Better introspection tooling
+
+Early on I borrowed a reference-based comparison approach from Python, hoping to make subtree comparisons cheaper — the optimizer makes a lot of them. The trade-off cost us the ability to trace Rust source lines and ONNX nodes back to lines of the generated kernel. I want to switch the comparison to hash-based.

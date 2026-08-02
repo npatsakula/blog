@@ -12,12 +12,20 @@
 // engine — is called out as a labeled band inside the block.
 //
 // Locale-neutral: IR/stage words are technical labels; the translatable
-// sentence lives in `caption`.
+// sentence lives in `caption`, and the `aria-label` is localized via
+// Astro.currentLocale.
+
+import { normalizeLocale } from '../i18n/ui';
 
 interface Props {
 	caption?: string;
 }
 const { caption } = Astro.props;
+const locale = normalizeLocale(Astro.currentLocale);
+const ariaLabel =
+	locale === 'en'
+		? 'Svod uses a single intermediate representation — UOp — across all stages (build, optimize, schedule, render) with no hard translation boundaries between them.'
+		: 'Svod использует одно внутреннее представление — UOp — для всех стадий (build, optimize, schedule, render) без жёстких границ перевода между ними.';
 
 const stages = ['build', 'optimize', 'schedule', 'render'];
 
@@ -40,7 +48,7 @@ const stH = blockH / stages.length;
 	<svg
 		viewBox={`0 0 ${W} ${H}`}
 		role="img"
-		aria-label="Svod использует одно внутреннее представление — UOp — для всех стадий (build, optimize, schedule, render) без жёстких границ перевода между ними."
+		aria-label={ariaLabel}
 	>
 		<text class="col-head" x={W / 2} y={headerY} text-anchor="middle">Svod · 1 representation</text>
 

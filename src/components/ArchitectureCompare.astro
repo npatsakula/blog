@@ -8,11 +8,19 @@
 // stack), to be paired later with a separate diagram stating Svod's answer.
 // IR names are proper nouns and the annotations are short, locale-neutral
 // labels; translatable explanation lives in the `caption` prop and prose.
+// The `aria-label` is localized via Astro.currentLocale.
+
+import { normalizeLocale } from '../i18n/ui';
 
 interface Props {
 	caption?: string;
 }
 const { caption } = Astro.props;
+const locale = normalizeLocale(Astro.currentLocale);
+const ariaLabel =
+	locale === 'en'
+		? 'PyTorch stacks seven-plus intermediate representations (TorchDynamo, FX Graph, AOTAutograd, ATen IR, PrimIR, Dispatcher, Inductor); each boundary between them is a bridge for a vendor, a break in debugging context, and a support surface.'
+		: 'PyTorch складирует семь с лишним внутренних представлений (TorchDynamo, FX Graph, AOTAutograd, ATen IR, PrimIR, Dispatcher, Inductor); каждая граница между ними — это мост для вендора, разрыв контекста отладки и поверхность поддержки.';
 
 type Lang = 'Py' | 'C++' | 'MLIR';
 interface Ir {
@@ -60,7 +68,7 @@ const irGap = 4;
 	<svg
 		viewBox={`0 0 ${W} ${H}`}
 		role="img"
-		aria-label="PyTorch складирует семь с лишним внутренних представлений (TorchDynamo, FX Graph, AOTAutograd, ATen IR, PrimIR, Dispatcher, Inductor); каждая граница между ними — это мост для вендора, разрыв контекста отладки и поверхность поддержки."
+		aria-label={ariaLabel}
 	>
 		<text class="col-head" x={W / 2} y={headerY} text-anchor="middle">PyTorch · 7+ representations</text>
 

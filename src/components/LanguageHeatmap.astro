@@ -73,13 +73,20 @@ const gridLeft = (W - blockW) / 2 + labelW + labelGap;
 // Inline per-cell so the SVG carries its own colors (no CSS var math needed at runtime).
 const accent = '37, 55, 255'; // --accent #2337ff as RGB triplet for rgba()
 const tint = (s: number) => `rgba(${accent}, ${(0.08 + s * 0.72).toFixed(3)})`;
+
+import { normalizeLocale } from '../i18n/ui';
+const locale = normalizeLocale(Astro.currentLocale);
+const ariaLabel =
+	locale === 'en'
+		? 'Language comparison: Python, C++, and Rust across four axes — type safety, fearless concurrency, development speed, ML ecosystem. Rust is strong on three; the ML ecosystem is an honest gap that Svod fills.'
+		: 'Сравнение языков: Python, C++ и Rust по четырём осям — типобезопасность, fearless concurrency, скорость разработки, ML-экосистема. Rust силён на трёх, ML-экосистема — честный пробел, который заполняет Svod.';
 ---
 
 <figure class="lang-heatmap">
 	<svg
 		viewBox={`0 0 ${W} ${H}`}
 		role="img"
-		aria-label="Сравнение языков: Python, C++ и Rust по четырём осям — типобезопасность, fearless concurrency, скорость разработки, ML-экосистема. Rust силён на трёх, ML-экосистема — честный пробел, который заполняет Svod."
+		aria-label={ariaLabel}
 	>
 		{/* column headers */}
 		{langs.map((lang, i) => {
