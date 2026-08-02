@@ -16,10 +16,13 @@ export default defineConfig({
 		// Russian is the primary locale. `prefixDefaultLocale: true` gives
 		// symmetric `/ru/` + `/en/` routing under base, so every page lives at
 		// `/<base>/<locale>/...` and a single `[locale]/...` route structure
-		// serves both languages. `/` redirects to `/ru/`.
+		// serves both languages. `redirectToDefaultLocale` is disabled because
+		// Astro's auto `/` → `/ru/` redirect would target a non-existent locale
+		// root (there is no home page); the manual `src/pages/index.astro`
+		// redirects `/` straight to `/ru/blog/` instead.
 		defaultLocale: 'ru',
 		locales: ['ru', 'en'],
-		routing: { prefixDefaultLocale: true, redirectToDefaultLocale: true },
+		routing: { prefixDefaultLocale: true, redirectToDefaultLocale: false },
 		// Show the Russian version when an English translation is missing.
 		fallback: { en: 'ru' },
 	},

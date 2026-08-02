@@ -10,15 +10,14 @@ const base = `${import.meta.env.BASE_URL}/`.replace(/\/+$/, '/');
 const locale = normalizeLocale(Astro.currentLocale);
 // Resolve the href against base and the current locale, so e.g. `/about`
 // becomes `/blog/ru/about/`.
-const resolvedHref =
-	href === '/' ? `${base}${locale}/` : `${base}${locale}${href}`;
+const resolvedHref = `${base}${locale}${href}`;
 // Strip base + locale to compare against the route path for active state.
 const pathname = Astro.url.pathname.replace(base, '/').replace(
-	new RegExp(`^/${locale}(?=/|$)`),
-	'',
+	new RegExp(`^/${locale}/?`),
+	'/',
 );
 const subpath = pathname.match(/[^\/]+/g);
-const isActive = href === pathname || href === '/' + (subpath?.[0] || '');
+const isActive = href === '/' + (subpath?.[0] || '');
 ---
 
 <a href={resolvedHref} class:list={[className, { active: isActive }]} {...props}>

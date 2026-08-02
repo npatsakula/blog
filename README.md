@@ -13,7 +13,7 @@ Personal blog of Nikita Patsakula (engineering, tensor compute, ML infrastructur
 
 ## Internationalization
 
-The site serves two locales, Russian (`ru`, default) and English (`en`), with symmetric routing: every page lives under `/<base>/<locale>/...`, and `/` redirects to `/ru/`.
+The site serves two locales, Russian (`ru`, default) and English (`en`), with symmetric routing: every page lives under `/<base>/<locale>/...`, and `/` redirects to the default locale's blog listing (`/ru/blog/`). There is no separate home page — the blog index is the landing page.
 
 - **Pages** live under `src/pages/[locale]/` and emit one route per locale via `getStaticPaths`.
 - **Posts** live in `src/content/blog/<locale>/`; a post's file path is its `id` (e.g. `ru/my-post`), and each route renders only the posts whose `id` starts with that locale.

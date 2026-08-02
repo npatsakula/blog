@@ -9,25 +9,22 @@ export const defaultLocale: Locale = 'ru';
 // English mirrors it. Add keys to both blocks together.
 const strings: Record<Locale, {
 	siteDescription: string;
-	readBlog: string;
 	aboutTitle: string;
-	nav: { home: string; blog: string; about: string };
+	nav: { blog: string; about: string };
 	copyright: string;
 }> = {
 	ru: {
 		siteDescription:
 			'Заметки о тензорных вычислениях, инфраструктуре ML и инженерии на Rust.',
-		readBlog: 'Читать блог →',
 		aboutTitle: 'Обо мне',
-		nav: { home: 'Главная', blog: 'Блог', about: 'Обо мне' },
+		nav: { blog: 'Блог', about: 'Обо мне' },
 		copyright: 'Все права защищены.',
 	},
 	en: {
 		siteDescription:
 			'Notes on tensor compute, ML infrastructure, and engineering in Rust.',
-		readBlog: 'Read the blog →',
 		aboutTitle: 'About',
-		nav: { home: 'Home', blog: 'Blog', about: 'About' },
+		nav: { blog: 'Blog', about: 'About' },
 		copyright: 'All rights reserved.',
 	},
 };

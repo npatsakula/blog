@@ -1,10 +1,11 @@
 ---
 // Root entry. With `prefixDefaultLocale: true` there is no unprefixed home
-// page, so `/` redirects to the default locale (`/ru/`). `redirectToDefaultLocale`
-// bakes this into a static meta-refresh redirect at build time.
+// page, so `/` redirects to the default locale's blog listing (`/ru/blog/`).
+// `redirectToDefaultLocale` bakes this into a static meta-refresh redirect at
+// build time.
 import { defaultLocale } from '../i18n/ui';
 const base = `${import.meta.env.BASE_URL}/`.replace(/\/+$/, '/');
-return Astro.redirect(`${base}${defaultLocale}/`, 302);
+return Astro.redirect(`${base}${defaultLocale}/blog/`, 302);
 ---
 
 <!doctype html>
@@ -13,12 +14,12 @@ return Astro.redirect(`${base}${defaultLocale}/`, 302);
 		<meta charset="utf-8" />
 		<meta
 			http-equiv="refresh"
-			content={`0; url=${base}${defaultLocale}/`}
+			content={`0; url=${base}${defaultLocale}/blog/`}
 		/>
 	</head>
 	<body>
 		<p>
-			Redirecting to <a href={`${base}${defaultLocale}/`}>{defaultLocale}/</a>.
+			Redirecting to <a href={`${base}${defaultLocale}/blog/`}>{defaultLocale}/blog/</a>.
 		</p>
 	</body>
 </html>

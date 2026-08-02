@@ -15,14 +15,13 @@ const rest = Astro.url.pathname
 	.replace(new RegExp(`^/${locale}/?`), '')
 	.replace(/\/+$/, '');
 const switchHref = (code: string) =>
-	rest ? `${base}${code}/${rest}/` : `${base}${code}/`;
+	rest ? `${base}${code}/${rest}/` : `${base}${code}/blog/`;
 ---
 
 <header>
 	<nav>
-		<h2><a href={`${base}${locale}/`}>{SITE_TITLE}</a></h2>
+		<h2><a href={`${base}${locale}/blog/`}>{SITE_TITLE}</a></h2>
 		<div class="internal-links">
-			<HeaderLink href="/">{t.nav.home}</HeaderLink>
 			<HeaderLink href="/blog">{t.nav.blog}</HeaderLink>
 			<HeaderLink href="/about">{t.nav.about}</HeaderLink>
 		</div>
