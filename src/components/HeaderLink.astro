@@ -9,7 +9,7 @@ const base = `${import.meta.env.BASE_URL}/`.replace(/\/+$/, '/');
 // Locale of the current page — used to scope every internal nav link.
 const locale = normalizeLocale(Astro.currentLocale);
 // Resolve the href against base and the current locale, so e.g. `/about`
-// becomes `/blog/ru/about/`.
+// becomes `/ru/about/`.
 const resolvedHref = `${base}${locale}${href}`;
 // Strip base + locale to compare against the route path for active state.
 const pathname = Astro.url.pathname.replace(base, '/').replace(

@@ -1,6 +1,7 @@
 ---
 // Root entry. With `prefixDefaultLocale: true` there is no unprefixed home
 // page, so `/` redirects to the default locale's blog listing (`/ru/blog/`).
+// (`/ru/blog/` here is the `[locale]/blog/` *route* segment, not a base path.)
 // `redirectToDefaultLocale` bakes this into a static meta-refresh redirect at
 // build time.
 import { defaultLocale } from '../i18n/ui';

@@ -6,12 +6,11 @@ import { defineConfig, fontProviders } from 'astro/config';
 
 // https://astro.build/config
 export default defineConfig({
-	// GitHub Pages serves project sites at <user>.github.io/<repo>/.
-	// `site` + `base` make all internal links, assets, sitemap, and RSS
-	// resolve under that subpath. When you move to a custom domain later,
-	// drop `base` and point `site` at the domain.
-	site: 'https://npatsakula.github.io',
-	base: '/blog',
+	// Served from the custom domain `blog.vpermilp.online` (a GitHub Pages
+	// project site with a CNAME record pointing at npatsakula.github.io).
+	// No `base` is needed at the domain root, so all internal links, assets,
+	// sitemap, and RSS resolve directly under `/`.
+	site: 'https://blog.vpermilp.online',
 	i18n: {
 		// Russian is the primary locale. `prefixDefaultLocale: true` gives
 		// symmetric `/ru/` + `/en/` routing under base, so every page lives at
