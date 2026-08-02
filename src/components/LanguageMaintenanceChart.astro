@@ -57,7 +57,7 @@ const spec: Spec = {
 			scale: { domain: [0.5, 10.5] },
 			axis: {
 				title: 'Размер и сложность кодовой базы',
-				titleFontSize: 14,
+				titleFontSize: 12,
 				labels: false,
 				domain: false,
 				grid: false,
@@ -100,7 +100,7 @@ const spec: Spec = {
 					type: 'quantitative',
 					axis: {
 						title: 'Стоимость поддержки кодовой базы',
-						titleFontSize: 14,
+						titleFontSize: 12,
 						labels: false,
 						domain: false,
 						grid: true,
@@ -114,7 +114,7 @@ const spec: Spec = {
 							orient: 'top',
 							direction: 'horizontal',
 							title: null,
-							labelFontSize: 13,
+							labelFontSize: 12,
 							symbolType: 'stroke',
 							symbolSize: 60,
 						},
@@ -133,7 +133,7 @@ const spec: Spec = {
 		// Zone labels (own y encoding, off the cost scale).
 		{
 			data: { values: [{ x: 2.9, y: 11.0, t: 'MVP / small product' }] },
-			mark: { type: 'text', fontSize: 14, fontWeight: 600, color: '#475569', baseline: 'bottom' },
+			mark: { type: 'text', fontSize: 12, fontWeight: 600, color: '#475569', baseline: 'bottom' },
 			encoding: {
 				x: { field: 'x', type: 'quantitative' },
 				y: { field: 'y', type: 'quantitative' },
@@ -142,7 +142,7 @@ const spec: Spec = {
 		},
 		{
 			data: { values: [{ x: 7.9, y: 11.0, t: 'high-load production' }] },
-			mark: { type: 'text', fontSize: 14, fontWeight: 600, color: '#b91c1c', baseline: 'bottom' },
+			mark: { type: 'text', fontSize: 12, fontWeight: 600, color: '#b91c1c', baseline: 'bottom' },
 			encoding: {
 				x: { field: 'x', type: 'quantitative' },
 				y: { field: 'y', type: 'quantitative' },
