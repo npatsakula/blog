@@ -28,6 +28,14 @@ export default defineConfig({
 		// Emit hreflang alternates between ru/en so search engines link siblings.
 		sitemap({ i18n: { defaultLocale: 'ru', locales: { ru: 'ru-RU', en: 'en-US' } } }),
 	],
+	// Light Shiki theme so code blocks match the minimal, light page aesthetic
+	// instead of Astro's default `github-dark` slab.
+	markdown: {
+		shikiConfig: {
+			theme: 'github-light',
+			wrap: false,
+		},
+	},
 	fonts: [
 		{
 			provider: fontProviders.local(),

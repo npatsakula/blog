@@ -1,0 +1,302 @@
+---
+// Three hardware tiers (Server / Consumer / Mobile) under a single Svod runtime.
+// Inline SVG in the spirit of OnnxEcosystem. The graphic carries only
+// non-translatable tokens (the "Svod" brand wordmark, vendor monograms, and
+// product model codes), so it needs no changes when the post is localized —
+// the surrounding prose and the `caption` prop do the translatable explaining.
+//
+// Identity: a uniform monogram badge per vendor (AMD / NV / QC / RK) plus the
+// iconic Apple glyph. Status is the single accent dimension: published entries
+// get the accent border + filled status dot, planned ones are muted + hollow.
+
+type IconName = 'server' | 'consumer' | 'mobile';
+type Status = 'published' | 'planned';
+interface Vendor {
+	mark: 'AMD' | 'NV' | 'APPLE' | 'QC' | 'RK'; // APPLE renders the apple glyph
+	model: string; // product code — language-neutral
+	status: Status;
+}
+interface Tier {
+	icon: IconName;
+	vendors: Vendor[];
+}
+interface Props {
+	caption?: string;
+}
+
+const { caption } = Astro.props;
+
+const tiers: Tier[] = [
+	{
+		icon: 'server',
+		vendors: [
+			{ mark: 'AMD', model: 'MI300 / 350 / 450', status: 'published' },
+			{ mark: 'NV', model: 'H100 · H200 · B200', status: 'planned' },
+		],
+	},
+	{
+		icon: 'consumer',
+		vendors: [
+			{ mark: 'AMD', model: 'Ryzen AI Halo', status: 'published' },
+			{ mark: 'APPLE', model: 'M3 · M4 · M5', status: 'planned' },
+			{ mark: 'NV', model: 'RTX 30 · 40 · 50', status: 'planned' },
+		],
+	},
+	{
+		icon: 'mobile',
+		vendors: [
+			{ mark: 'QC', model: 'Snapdragon X', status: 'planned' },
+			{ mark: 'RK', model: 'RK3588', status: 'planned' },
+		],
+	},
+];
+
+// --- geometry --------------------------------------------------------------
+const W = 720;
+const H = 320;
+
+const rail = { x: 60, y: 22, w: 600, h: 32 }; // top Svod runtime bar
+const railBottom = rail.y + rail.h; // 54
+
+const colCx = [130, 360, 590];
+const iconCY = 96; // device icon center
+const iconTop = iconCY - 14; // 82
+
+const cardW = 196;
+const cardH = 46;
+const cardGap = 12;
+const cardTop0 = 140;
+
+const cols = tiers.map((tier, i) => ({
+	...tier,
+	cx: colCx[i],
+	cards: tier.vendors.map((v, j) => {
+		const y = cardTop0 + j * (cardH + cardGap);
+		return { ...v, x: colCx[i] - cardW / 2, y, cy: y + cardH / 2 };
+	}),
+}));
+
+// Simplified Apple silhouette (24-space), used only for the APPLE mark.
+const applePath =
+	'M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09l.01-.01zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z';
+---
+
+<figure class="hardware-tiers">
+	<svg
+		viewBox={`0 0 ${W} ${H}`}
+		role="img"
+		aria-label="Единый рантайм Svod на вершине охватывает три класса аппаратуры. Серверные ускорители: AMD MI300/MI350/MI450 (опубликовано), NVIDIA H100/H200/B200 (в планах). Пользовательские: AMD Ryzen AI Halo (опубликовано), Apple M3/M4 и NVIDIA RTX 50 (в планах). Встраиваемые: Qualcomm Snapdragon X и RockChip RK3588 (в планах)."
+	>
+		<!-- Svod runtime rail -->
+		<rect class="rail" x={rail.x} y={rail.y} width={rail.w} height={rail.h} rx={rail.h / 2} />
+		<text class="rail-text" x={W / 2} y={rail.y + rail.h / 2} text-anchor="middle" dominant-baseline="central">Svod</text>
+
+		<!-- connectors: rail → device icons -->
+		{cols.map((c) => (
+			<line class="connector" x1={c.cx} y1={railBottom} x2={c.cx} y2={iconTop} />
+		))}
+
+		<!-- device icons (line art, 24-space scaled ×1.2) -->
+		{cols.map((c) => (
+			<g class="tier-icon" transform={`translate(${c.cx - 14.4}, ${iconTop}) scale(1.2)`}>
+				{c.icon === 'server' && (
+					<>
+						<rect x="3" y="3" width="18" height="18" rx="2" />
+						<line x1="3" y1="9" x2="21" y2="9" />
+						<line x1="3" y1="15" x2="21" y2="15" />
+						<circle cx="6.5" cy="6" r="0.7" />
+						<circle cx="6.5" cy="12" r="0.7" />
+						<circle cx="6.5" cy="18" r="0.7" />
+					</>
+				)}
+				{c.icon === 'consumer' && (
+					<>
+						<rect x="2.5" y="4" width="19" height="13" rx="2" />
+						<line x1="8" y1="21" x2="16" y2="21" />
+						<line x1="12" y1="17" x2="12" y2="21" />
+					</>
+				)}
+				{c.icon === 'mobile' && (
+					<>
+						<rect x="6" y="2.5" width="12" height="19" rx="2.5" />
+						<line x1="10" y1="5.7" x2="14" y2="5.7" />
+						<circle cx="12" cy="18.4" r="0.8" />
+					</>
+				)}
+			</g>
+		))}
+
+		<!-- vendor cards per column -->
+		{cols.map((c) => (
+			<g>
+				{c.cards.map((card) => (
+					<g class:list={['card', `card--${card.status}`]}>
+						<rect class="card__bg" x={card.x} y={card.y} width={cardW} height={cardH} rx="9" />
+
+						{/* vendor mark: monogram badge, or apple glyph for APPLE */}
+						{card.mark === 'APPLE' ? (
+							<g class="mark-glyph" transform={`translate(${card.x + 13}, ${card.cy - 9}) scale(0.72)`}>
+								<path d={applePath} />
+							</g>
+						) : (
+							<>
+								<rect
+									class="badge"
+									x={card.x + 9}
+									y={card.cy - 11}
+									width="34"
+									height="22"
+									rx="5"
+								/>
+								<text
+									class="badge-text"
+									x={card.x + 9 + 17}
+									y={card.cy}
+									text-anchor="middle"
+									dominant-baseline="central">{card.mark}</text>
+							</>
+						)}
+
+						{/* model code */}
+						<text
+							class:list={['model', `model--${card.status}`]}
+							x={card.x + 52}
+							y={card.cy}
+							text-anchor="start"
+							dominant-baseline="central">{card.model}</text>
+
+						{/* status dot */}
+						<circle
+							class:list={['status-dot', `status-dot--${card.status}`]}
+							cx={card.x + cardW - 15}
+							cy={card.cy}
+							r="4.5"
+						/>
+					</g>
+				))}
+			</g>
+		))}
+	</svg>
+	{caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<style>
+	.hardware-tiers {
+		margin: 2em 0;
+	}
+	.hardware-tiers svg {
+		width: 100%;
+		height: auto;
+		display: block;
+	}
+
+	/* Svod runtime rail */
+	.rail {
+		fill: var(--accent);
+	}
+	.rail-text {
+		fill: #fff;
+		font-family: var(--font-atkinson);
+		font-size: 16px;
+		font-weight: 700;
+		letter-spacing: 0.02em;
+	}
+
+	/* connectors — quiet hairlines */
+	.connector {
+		stroke: rgb(var(--gray-light));
+		stroke-width: 1.5;
+		fill: none;
+	}
+
+	/* device icons */
+	.tier-icon {
+		color: rgb(var(--gray-dark));
+	}
+	.tier-icon rect,
+	.tier-icon line {
+		stroke: currentColor;
+		stroke-width: 2;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+		fill: none;
+	}
+	.tier-icon circle {
+		fill: currentColor;
+		stroke: none;
+	}
+
+	/* vendor cards */
+	.card__bg {
+		fill: #fff;
+		stroke-width: 1.5;
+	}
+	.card--published .card__bg {
+		stroke: var(--accent);
+		stroke-width: 2;
+	}
+	.card--planned .card__bg {
+		stroke: rgb(var(--gray-light));
+	}
+
+	/* monogram badge */
+	.badge {
+		fill: rgb(var(--gray-light));
+	}
+	.badge-text {
+		fill: rgb(var(--gray-dark));
+		font-family: var(--font-atkinson);
+		font-size: 11px;
+		font-weight: 700;
+		letter-spacing: 0.02em;
+	}
+	.card--published .badge {
+		fill: var(--accent);
+	}
+	.card--published .badge-text {
+		fill: #fff;
+	}
+
+	/* apple glyph */
+	.mark-glyph {
+		color: rgb(var(--gray));
+	}
+	.mark-glyph path {
+		fill: currentColor;
+		stroke: none;
+	}
+
+	/* model code */
+	.model {
+		font-family: var(--font-atkinson);
+		font-size: 12.5px;
+		font-weight: 500;
+	}
+	.model--published {
+		fill: var(--accent);
+		font-weight: 700;
+	}
+	.model--planned {
+		fill: rgb(var(--gray-dark));
+	}
+
+	/* status dot */
+	.status-dot {
+		stroke-width: 1.5;
+	}
+	.status-dot--published {
+		fill: var(--accent);
+		stroke: none;
+	}
+	.status-dot--planned {
+		fill: none;
+		stroke: rgb(var(--gray));
+	}
+
+	.hardware-tiers figcaption {
+		text-align: center;
+		color: rgb(var(--gray));
+		font-size: 0.85em;
+		margin-top: 0.6em;
+	}
+</style>

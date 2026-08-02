@@ -31,11 +31,19 @@ const { title, description, pubDate, updatedDate, heroImage, locale } =
 				box-shadow: var(--box-shadow);
 			}
 			.prose {
-				width: 720px;
+				width: min(960px, 100%);
 				max-width: calc(100% - 2em);
 				margin: auto;
 				padding: 1em;
 				color: rgb(var(--gray-dark));
+			}
+			/* Code blocks in post content are rendered from MDX into the slot,
+			   so the rule needs :global() to reach them. Smaller font keeps
+			   long Rust/ML example lines from overflowing the 720px column. */
+			.prose :global(pre) {
+				font-size: 0.76em;
+				border: 1px solid rgb(var(--gray-light));
+				border-radius: 8px;
 			}
 			.title {
 				margin-bottom: 1em;
