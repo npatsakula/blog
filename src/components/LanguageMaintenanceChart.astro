@@ -1,0 +1,221 @@
+---
+// Development cost vs codebase complexity: the case for Rust as a project grows.
+//
+// Python is genuinely cheaper to START — glue parts together fast, cheap to
+// begin — so its curve begins BELOW Rust. But its development cost scales
+// superlinearly: refactoring without a compiler is risky, and concurrency past
+// the GIL forces IPC / multiprocessing / locks that turn into a nightmare as
+// the codebase grows. Rust starts higher (the borrow checker demands more up
+// front) but grows ~linearly — the compiler makes refactoring safe and
+// concurrency is checked, so adding code doesn't multiply surprises. The curves
+// CROSS — that crossover is the visual anchor, the size beyond which "cheap to
+// start" becomes "expensive to grow."
+//
+// Inline Vega-Lite (same lazy-init VegaLite machinery), so no client JS beyond
+// the existing vega-embed path.
+
+import type { Spec } from 'vega-lite';
+
+interface Props {
+	caption?: string;
+}
+const { caption } = Astro.props;
+
+// Curve shapes, hand-tuned to tell the honest story — DEVELOPMENT cost as the
+// codebase grows in size & complexity (NOT runtime/load cost):
+//  - Python: starts low — glue parts fast, cheap to begin. Flat-ish early, then
+//    a superlinear knee ~complexity 6 where refactoring without a compiler and
+//    concurrency past the GIL (IPC, multiprocessing, locks) become a nightmare.
+//  - Rust:   starts higher (fighting the borrow checker up front), but near-
+//    linear growth — the compiler makes refactoring safe and concurrency is
+//    checked, so growing the codebase doesn't multiply surprises.
+// Absolute y-values are arbitrary units; only the SHAPE carries meaning.
+// Crossover lands ~complexity 6 so Python's "cheap to start" window is real.
+const stages = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+const pyCost = (x: number) => 0.6 + 0.45 * x + 0.055 * x * x; // low start, late knee
+const rsCost = (x: number) => 1.6 + 0.55 * x; // starts higher, linear
+
+const values = [
+	...stages.map((x) => ({ complexity: x, cost: +pyCost(x).toFixed(2), language: 'Python' })),
+	...stages.map((x) => ({ complexity: x, cost: +rsCost(x).toFixed(2), language: 'Rust' })),
+];
+
+// Crossover where pyCost(x) == rsCost(x): ~5.27. The two zone rectangles meet
+// here, so the boundary itself marks the crossover — no separate dot needed.
+const crossX = 5.27;
+
+const spec: Spec = {
+	width: 'container',
+	height: 320,
+	encoding: {
+		// Shared X scale (used by every layer); Y and color are per-layer so the
+		// rect/rule background bands render full-height instead of inheriting a
+		// null `cost` and collapsing to zero.
+		x: {
+			field: 'complexity',
+			type: 'quantitative',
+			scale: { domain: [0.5, 10.5] },
+			axis: {
+				title: 'Размер и сложность кодовой базы',
+				titleFontSize: 14,
+				labels: false,
+				domain: false,
+				grid: false,
+			},
+		},
+	},
+	layer: [
+		// MVP / small-product zone: full-height band left of the crossover.
+		// No y/y2 encoding → Vega-Lite spans the full plot height.
+		{
+			data: { values: [{ x: 0.5, x2: crossX }] },
+			mark: { type: 'rect', fill: '#f1f5f9', opacity: 0.7 },
+			encoding: {
+				x: { field: 'x', type: 'quantitative' },
+				x2: { field: 'x2' },
+			},
+		},
+		// High-load production zone: full-height band right of the crossover.
+		{
+			data: { values: [{ x: crossX, x2: 10.5 }] },
+			mark: { type: 'rect', fill: '#fef2f2', opacity: 0.6 },
+			encoding: {
+				x: { field: 'x', type: 'quantitative' },
+				x2: { field: 'x2' },
+			},
+		},
+		// Crossover boundary — thin dashed vertical where the two zones meet.
+		{
+			data: { values: [{ x: crossX }] },
+			mark: { type: 'rule', stroke: '#64748b', strokeWidth: 1, strokeDash: [3, 4] },
+			encoding: { x: { field: 'x', type: 'quantitative' } },
+		},
+		// The two curves. Y and color live ONLY here, so the bands above aren't
+		// forced onto the cost scale.
+		{
+			data: { values },
+			encoding: {
+				y: {
+					field: 'cost',
+					type: 'quantitative',
+					axis: {
+						title: 'Стоимость поддержки кодовой базы',
+						titleFontSize: 14,
+						labels: false,
+						domain: false,
+						grid: true,
+					},
+					scale: { zero: false },
+				},
+				color: {
+					field: 'language',
+					type: 'nominal',
+						legend: {
+							orient: 'top',
+							direction: 'horizontal',
+							title: null,
+							labelFontSize: 13,
+							symbolType: 'stroke',
+							symbolSize: 60,
+						},
+					scale: {
+						domain: ['Python', 'Rust'],
+						range: ['#cbd5e1', '#2337ff'],
+					},
+				},
+			},
+			mark: {
+				type: 'line',
+				strokeWidth: 2.5,
+				interpolate: 'monotone',
+			},
+		},
+		// Zone labels (own y encoding, off the cost scale).
+		{
+			data: { values: [{ x: 2.9, y: 11.0, t: 'MVP / small product' }] },
+			mark: { type: 'text', fontSize: 14, fontWeight: 600, color: '#475569', baseline: 'bottom' },
+			encoding: {
+				x: { field: 'x', type: 'quantitative' },
+				y: { field: 'y', type: 'quantitative' },
+				text: { field: 't' },
+			},
+		},
+		{
+			data: { values: [{ x: 7.9, y: 11.0, t: 'high-load production' }] },
+			mark: { type: 'text', fontSize: 14, fontWeight: 600, color: '#b91c1c', baseline: 'bottom' },
+			encoding: {
+				x: { field: 'x', type: 'quantitative' },
+				y: { field: 'y', type: 'quantitative' },
+				text: { field: 't' },
+			},
+		},
+	],
+	config: {
+		view: { stroke: null },
+		font: 'Atkinson',
+	},
+};
+---
+
+<figure class="lang-maintenance">
+	<div class="lang-maintenance__chart" data-vega-target />
+	<script type="application/json" data-vega-spec set:html={JSON.stringify(spec)} />
+	{caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<script>
+	const figures = document.querySelectorAll<HTMLElement>('.lang-maintenance');
+
+	for (const figure of figures) {
+		const target = figure.querySelector<HTMLElement>('[data-vega-target]');
+		const specNode = figure.querySelector<HTMLScriptElement>('script[data-vega-spec]');
+		if (!target || !specNode) continue;
+
+		const spec = JSON.parse(specNode.textContent ?? '{}');
+
+		const render = async () => {
+			const { default: vegaEmbed } = await import('vega-embed');
+			await vegaEmbed(target, spec, {
+				actions: false,
+				renderer: 'svg',
+			});
+		};
+
+		// Lazy-init: render when scrolled into view (matches VegaLite.astro).
+		if ('IntersectionObserver' in window) {
+			const observer = new IntersectionObserver(
+				(entries) => {
+					for (const entry of entries) {
+						if (entry.isIntersecting) {
+							render();
+							observer.disconnect();
+						}
+					}
+				},
+				{ rootMargin: '200px' },
+			);
+			observer.observe(figure);
+		} else {
+			render();
+		}
+	}
+</script>
+
+<style>
+	.lang-maintenance {
+		margin: 2em 0;
+	}
+	.lang-maintenance__chart {
+		width: 100%;
+	}
+	.lang-maintenance__chart :global(svg) {
+		width: 100%;
+		height: auto;
+	}
+	.lang-maintenance figcaption {
+		text-align: center;
+		color: rgb(var(--gray));
+		font-size: 0.85em;
+		margin-top: 0.6em;
+	}
+</style>

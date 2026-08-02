@@ -1,0 +1,167 @@
+---
+// The PyTorch "layered cake": 7+ stacked internal representations, each pair
+// separated by a hard translation boundary. The boundaries — not the boxes —
+// are the cost this diagram must land the eye on, so each one carries a short
+// annotation (vendor bridge / debug break / maint surface) naming the price.
+//
+// Single column, centered: this picture states the *problem* (PyTorch's IR
+// stack), to be paired later with a separate diagram stating Svod's answer.
+// IR names are proper nouns and the annotations are short, locale-neutral
+// labels; translatable explanation lives in the `caption` prop and prose.
+
+interface Props {
+	caption?: string;
+}
+const { caption } = Astro.props;
+
+type Lang = 'Py' | 'C++' | 'MLIR';
+interface Ir {
+	name: string;
+	lang: Lang;
+}
+// Top → bottom, matching the post text (line 101).
+const irs: Ir[] = [
+	{ name: 'TorchDynamo', lang: 'Py' },
+	{ name: 'FX Graph', lang: 'Py' },
+	{ name: 'AOTAutograd', lang: 'C++' },
+	{ name: 'ATen IR', lang: 'C++' },
+	{ name: 'PrimIR', lang: 'C++' },
+	{ name: 'Dispatcher', lang: 'C++' },
+	{ name: 'Inductor', lang: 'MLIR' },
+];
+
+// One cost label per boundary, top → bottom.
+const boundaryCosts = [
+	'vendor bridge',
+	'debug break',
+	'maint surface',
+	'vendor bridge',
+	'debug break',
+	'maint surface',
+];
+
+// --- geometry --------------------------------------------------------------
+const W = 720;
+const H = 360;
+
+const colW = 280;
+const colX = (W - colW) / 2; // centered single column
+
+const headerY = 26;
+const layerTop = 56;
+const layerBot = H - 34;
+const layerH = layerBot - layerTop;
+
+const irH = layerH / irs.length;
+const irGap = 4;
+---
+
+<figure class="arch-pytorch">
+	<svg
+		viewBox={`0 0 ${W} ${H}`}
+		role="img"
+		aria-label="PyTorch складирует семь с лишним внутренних представлений (TorchDynamo, FX Graph, AOTAutograd, ATen IR, PrimIR, Dispatcher, Inductor); каждая граница между ними — это мост для вендора, разрыв контекста отладки и поверхность поддержки."
+	>
+		<text class="col-head" x={W / 2} y={headerY} text-anchor="middle">PyTorch · 7+ representations</text>
+
+		{/* stacked IRs with SOLID gaps (the boundaries live in the gaps) */}
+		{irs.map((ir, i) => {
+			const y = layerTop + i * irH;
+			return (
+				<g class="ir-band">
+					<rect class="ir-rect" x={colX} y={y + irGap / 2} width={colW} height={irH - irGap} rx="5" />
+					<text class="ir-name" x={colX + 16} y={y + irH / 2} dominant-baseline="central">{ir.name}</text>
+					<rect class="lang-tag" x={colX + colW - 46} y={y + irH / 2 - 9} width="32" height="18" rx="4" />
+					<text class="lang-text" x={colX + colW - 30} y={y + irH / 2} text-anchor="middle" dominant-baseline="central">{ir.lang}</text>
+				</g>
+			);
+		})}
+
+		{/* boundary markers + cost annotations, centered in each gap */}
+		{irs.slice(0, -1).map((_, i) => {
+			const y = layerTop + (i + 1) * irH;
+			return (
+				<g class="boundary">
+					<line class="boundary-line" x1={colX - 10} y1={y} x2={colX + colW + 10} y2={y} />
+					<circle class="boundary-dot" cx={colX - 10} cy={y} r="3" />
+					<text class="boundary-cost" x={colX + colW + 18} y={y} dominant-baseline="central">{boundaryCosts[i]}</text>
+				</g>
+			);
+		})}
+
+		{/* footer */}
+		<text class="foot" x={W / 2} y={H - 12} text-anchor="middle">6 translation boundaries · each a vendor bridge, debug break, maintenance surface</text>
+	</svg>
+	{caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<style>
+	.arch-pytorch {
+		margin: 2em 0;
+	}
+	.arch-pytorch svg {
+		width: 100%;
+		height: auto;
+		display: block;
+	}
+
+	.col-head {
+		fill: rgb(var(--gray-dark));
+		font-family: var(--font-atkinson);
+		font-size: 15px;
+		font-weight: 700;
+	}
+
+	.ir-rect {
+		fill: #fff;
+		stroke: rgb(var(--gray-light));
+		stroke-width: 1.5;
+	}
+	.ir-name {
+		fill: rgb(var(--gray-dark));
+		font-family: var(--font-atkinson);
+		font-size: 13px;
+		font-weight: 500;
+	}
+	.lang-tag {
+		fill: rgb(var(--gray-light));
+	}
+	.lang-text {
+		fill: rgb(var(--gray));
+		font-family: var(--font-atkinson);
+		font-size: 9.5px;
+		font-weight: 700;
+	}
+
+	/* the cost — accent so the eye lands on boundaries, not boxes */
+	.boundary-line {
+		stroke: var(--accent);
+		stroke-width: 1.5;
+		stroke-dasharray: 4 3;
+		opacity: 0.7;
+	}
+	.boundary-dot {
+		fill: var(--accent);
+		opacity: 0.8;
+	}
+	.boundary-cost {
+		fill: var(--accent);
+		font-family: var(--font-atkinson);
+		font-size: 10.5px;
+		font-weight: 600;
+		opacity: 0.85;
+	}
+
+	.foot {
+		fill: rgb(var(--gray));
+		font-family: var(--font-atkinson);
+		font-size: 11.5px;
+	}
+
+	.arch-pytorch figcaption {
+		text-align: center;
+		color: rgb(var(--gray));
+		font-size: 0.85em;
+		margin-top: 0.6em;
+	}
+</style>

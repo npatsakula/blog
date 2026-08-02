@@ -1,0 +1,118 @@
+---
+// Svod's single-IR architecture: one representation (UOp) carries the tensor
+// through build → optimize → schedule → render with no hard translation
+// boundaries between stages. A small provenance tag credits the design lineage
+// to Tinygrad, matching the prose of the "Один UOp, чтобы править всеми"
+// section. This is the *answer* diagram, paired with the PyTorch *problem*
+// diagram earlier in the chapter.
+//
+// Svod-centric: the focus is the chosen architecture, stated cleanly; the
+// Tinygrad tag is a footnote, not a competing column. Svod's specific
+// extension over the inherited design — the compile-time-verified rewrite
+// engine — is called out as a labeled band inside the block.
+//
+// Locale-neutral: IR/stage words are technical labels; the translatable
+// sentence lives in `caption`.
+
+interface Props {
+	caption?: string;
+}
+const { caption } = Astro.props;
+
+const stages = ['build', 'optimize', 'schedule', 'render'];
+
+// --- geometry --------------------------------------------------------------
+const W = 720;
+const H = 240;
+
+const blockW = 320;
+const blockX = (W - blockW) / 2; // centered
+
+const headerY = 26;
+const top = 56;
+const bot = H - 20;
+const blockH = bot - top;
+
+const stH = blockH / stages.length;
+---
+
+<figure class="arch-svod">
+	<svg
+		viewBox={`0 0 ${W} ${H}`}
+		role="img"
+		aria-label="Svod использует одно внутреннее представление — UOp — для всех стадий (build, optimize, schedule, render) без жёстких границ перевода между ними."
+	>
+		<text class="col-head" x={W / 2} y={headerY} text-anchor="middle">Svod · 1 representation</text>
+
+		{/* the single solid UOp block */}
+		<rect class="svod-block" x={blockX} y={top} width={blockW} height={blockH} rx="8" />
+
+		{/* faint stage divisions — same stages, no hard boundaries */}
+		{stages.map((stage, i) => {
+			const y = top + (i + 0.5) * stH;
+			return (
+				<g>
+					{i > 0 && (
+						<line class="stage-div" x1={blockX + 20} y1={top + i * stH} x2={blockX + blockW - 20} y2={top + i * stH} />
+					)}
+					<text class="stage-name" x={W / 2} y={y} text-anchor="middle" dominant-baseline="central">{stage}</text>
+				</g>
+			);
+		})}
+
+		{/* the single-IR watermark behind the stages */}
+		<text class="svod-ir" x={W / 2} y={top + blockH / 2} text-anchor="middle" dominant-baseline="central">UOp</text>
+	</svg>
+	{caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<style>
+	.arch-svod {
+		margin: 2em 0;
+	}
+	.arch-svod svg {
+		width: 100%;
+		height: auto;
+		display: block;
+	}
+
+	.col-head {
+		fill: rgb(var(--gray-dark));
+		font-family: var(--font-atkinson);
+		font-size: 15px;
+		font-weight: 700;
+	}
+
+	.svod-block {
+		fill: color-mix(in srgb, var(--accent) 6%, transparent);
+		stroke: var(--accent);
+		stroke-width: 2;
+	}
+	.stage-div {
+		stroke: rgb(var(--gray));
+		stroke-width: 1;
+		stroke-dasharray: 2 4;
+		opacity: 0.4;
+	}
+	.stage-name {
+		fill: rgb(var(--gray-dark));
+		font-family: var(--font-atkinson);
+		font-size: 13px;
+		font-weight: 500;
+		opacity: 0.78;
+	}
+	.svod-ir {
+		fill: color-mix(in srgb, var(--accent) 12%, transparent);
+		font-family: var(--font-atkinson);
+		font-size: 48px;
+		font-weight: 800;
+		letter-spacing: 0.04em;
+	}
+
+	.arch-svod figcaption {
+		text-align: center;
+		color: rgb(var(--gray));
+		font-size: 0.85em;
+		margin-top: 0.6em;
+	}
+</style>

@@ -1,0 +1,163 @@
+---
+// Language tradeoff heatmap: Python · C++ · Rust across the four dimensions
+// the post actually argues — Type safety, Fearless concurrency, Dev velocity,
+// ML ecosystem. Cell tint encodes relative strength; the shape is the point:
+// Rust leads on three, with ML ecosystem as the honest gap Svod is built to fill.
+//
+// Deliberately an *illustration of a defended judgment*, not a scored claim —
+// the post has already earned these positions with hard numbers (4% traffic,
+// LOC, TFLOPS), so the chart stays restrained: accent-tinted squares, no
+// numbers, no stars. Labels are locale-neutral technical terms; the translatable
+// reading lives in the `caption` prop and prose.
+
+interface Props {
+	caption?: string;
+}
+const { caption } = Astro.props;
+
+// Strength: 0 (gap) → 1 (strong). Values reflect the post's own claims, not a
+// generic "languages ranked" opinion:
+//  - Type safety: Python (dynamic) < C++ (static, unchecked) < Rust (static + borrow ck)
+//  - Concurrency: Python (GIL) < C++ (manual, footgun) < Rust (fearless, checked)
+//  - Dev velocity: all three ≈ parity for an experienced engineer (the post's claim)
+//  - ML ecosystem: Python (dominant) >> C++ (library-tier) > Rust (the gap)
+type Lang = 'Python' | 'C++' | 'Rust';
+interface Row {
+	dim: string;
+	cells: Record<Lang, number>;
+}
+const rows: Row[] = [
+	{ dim: 'Type safety',        cells: { Python: 0.20, 'C++': 0.55, Rust: 1.00 } },
+	{ dim: 'Fearless concurrency', cells: { Python: 0.15, 'C++': 0.40, Rust: 1.00 } },
+	{ dim: 'Dev velocity',       cells: { Python: 0.85, 'C++': 0.80, Rust: 0.80 } },
+	{ dim: 'ML ecosystem',       cells: { Python: 1.00, 'C++': 0.50, Rust: 0.20 } },
+];
+const langs: Lang[] = ['Python', 'C++', 'Rust'];
+
+// --- geometry: derived from the actual text, not hand-tuned ---------------
+// SSR has no browser layout engine, so estimate rendered text width with a
+// per-font-size advance: sans-serif (Atkinson) averages ~0.55em per glyph.
+// The label band takes exactly what the longest dimension label needs (+ pad),
+// and every remaining pixel of the canvas goes to the cells — so swapping a
+// label recomputes the grid instead of leaving slack.
+const W = 720;
+const H = 300;
+
+const dimFont = 13;     // .dim-label font-size (px)
+const langFont = 14;    // .col-head font-size (px)
+const glyphAdvance = 0.55; // ~average em-per-glyph for Atkinson
+
+const textW = (s: string, font: number) => s.length * font * glyphAdvance;
+
+// Label band = widest dimension label + breathing room.
+const longestDim = rows.reduce((a, r) => (r.dim.length > a.length ? r.dim : a), '');
+const labelGap = 16;        // gap between label band and first cell
+const labelPad = 12;        // right-pad inside the label band
+const labelW = textW(longestDim, dimFont) + labelPad; // ~155
+
+// Cells claim every remaining pixel, split equally across the 3 columns.
+const cellGap = 8;
+const cellH = 44;
+const headerY = 34;
+const gridTop = 64;
+
+const nCells = langs.length;
+const gridW = W - labelW - labelGap; // fill the canvas
+const cellW = (gridW - (nCells - 1) * cellGap) / nCells;
+
+// Grid sits flush right of the centered label band.
+const blockW = labelW + labelGap + gridW;
+const gridLeft = (W - blockW) / 2 + labelW + labelGap;
+
+// accent tint at a given strength 0..1 — low strength = near-white, high = full accent.
+// Inline per-cell so the SVG carries its own colors (no CSS var math needed at runtime).
+const accent = '37, 55, 255'; // --accent #2337ff as RGB triplet for rgba()
+const tint = (s: number) => `rgba(${accent}, ${(0.08 + s * 0.72).toFixed(3)})`;
+---
+
+<figure class="lang-heatmap">
+	<svg
+		viewBox={`0 0 ${W} ${H}`}
+		role="img"
+		aria-label="Сравнение языков: Python, C++ и Rust по четырём осям — типобезопасность, fearless concurrency, скорость разработки, ML-экосистема. Rust силён на трёх, ML-экосистема — честный пробел, который заполняет Svod."
+	>
+		{/* column headers */}
+		{langs.map((lang, i) => {
+			const cx = gridLeft + i * (cellW + cellGap) + cellW / 2;
+			return (
+				<text class:list={['col-head', { 'col-head--rust': lang === 'Rust' }]} x={cx} y={headerY} text-anchor="middle">{lang}</text>
+			);
+		})}
+
+		{/* rows */}
+		{rows.map((row, ri) => {
+			const y = gridTop + ri * (cellH + cellGap);
+			return (
+				<g>
+					{/* dimension label */}
+					<text class="dim-label" x={gridLeft - 16} y={y + cellH / 2} text-anchor="end" dominant-baseline="central">{row.dim}</text>
+					{/* cells */}
+					{langs.map((lang, ci) => {
+						const x = gridLeft + ci * (cellW + cellGap);
+						const s = row.cells[lang];
+						return (
+							<g>
+								<rect class="cell" x={x} y={y} width={cellW} height={cellH} rx="6" fill={tint(s)} />
+							</g>
+						);
+					})}
+				</g>
+			);
+		})}
+
+		{/* Rust column emphasis: subtle bottom rule under the Rust column */}
+		<line class="rust-rule" x1={gridLeft + 2 * (cellW + cellGap)} y1={gridTop + rows.length * (cellH + cellGap) - 1} x2={gridLeft + 2 * (cellW + cellGap) + cellW} y2={gridTop + rows.length * (cellH + cellGap) - 1} />
+	</svg>
+	{caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<style>
+	.lang-heatmap {
+		margin: 2em 0;
+	}
+	.lang-heatmap svg {
+		width: 100%;
+		height: auto;
+		display: block;
+	}
+
+	.col-head {
+		fill: rgb(var(--gray-dark));
+		font-family: var(--font-atkinson);
+		font-size: 14px;
+		font-weight: 700;
+	}
+	.col-head--rust {
+		fill: var(--accent);
+	}
+
+	.dim-label {
+		fill: rgb(var(--gray-dark));
+		font-family: var(--font-atkinson);
+		font-size: 13px;
+		font-weight: 500;
+	}
+
+	.cell {
+		stroke: rgb(var(--gray-light));
+		stroke-width: 1;
+	}
+
+	.rust-rule {
+		stroke: var(--accent);
+		stroke-width: 2;
+		opacity: 0.5;
+	}
+
+	.lang-heatmap figcaption {
+		text-align: center;
+		color: rgb(var(--gray));
+		font-size: 0.85em;
+		margin-top: 0.6em;
+	}
+</style>
