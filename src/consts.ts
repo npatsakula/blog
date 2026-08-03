@@ -13,3 +13,8 @@ export const SOCIAL = {
 	twitter: 'https://x.com/_ccer0z',
 	github: 'https://github.com/npatsakula/',
 } as const;
+
+// Yandex.Metrika counter ID (the numeric ID from the "Counter" / «Счётчик»
+// tab). The snippet only renders in production builds, so `astro dev` never
+// fires hits. Set to `0` to fully disable tracking.
+export const YANDEX_METRIKA_ID = 111265719;
