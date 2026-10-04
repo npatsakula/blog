@@ -1,0 +1,255 @@
+---
+// Why language detection exists in a processing system: the detected language
+// selects the downstream pipeline. Inputs of different natures (a social post,
+// an email, a messenger message, an ASR transcription, a DLP intercept) enter
+// from the left, Spellman assigns a language in the middle, and each language
+// is processed by its own stack on the right — language-specific tokenization,
+// POS tagging, NER (absent for some languages: the row is there, the model is
+// not), and search indexing. Same stage slots, incompatible artifacts per
+// language: routing is not optional metadata, it is the dispatch decision.
+//
+// All visible strings come from the shared UI dictionary (src/i18n/ui.ts,
+// `diagram` key) so the figure translates with the locale.
+
+import { getUI } from '../i18n/ui';
+
+interface Props {
+	caption?: string;
+}
+const { caption } = Astro.props;
+const { inputs, pipelines, ariaLabel } = getUI(Astro.currentLocale).diagram;
+
+// 16×16 line icons, stroke-only, drawn at the input node's left edge.
+const icons: Record<string, string> = {
+	post: 'M2.5 3.5 h11 v7.5 h-5.5 l-2.5 2.5 v-2.5 h-3 z',
+	mail: 'M2.5 4 h11 v8 h-11 z M2.5 4 l5.5 4.5 l5.5 -4.5',
+	chat: 'M2.5 3 h7.5 v5.5 h-3.5 l-2 2 v-2 h-2 z M11.5 6 h2 v5.5 h-5',
+	mic: 'M8 2.5 a2 2 0 0 1 2 2 v3 a2 2 0 0 1 -4 0 v-3 a2 2 0 0 1 2 -2 z M5 8 a3 3 0 0 0 6 0 M8 11.5 v2 M6 13.5 h4',
+	shield: 'M8 2 l5 1.5 v4 c0 3 -2.5 5 -5 6 c-2.5 -1 -5 -3 -5 -6 v-4 z M8 5.5 l1.5 2 l-1 2.5 h-1 l-1 -2.5 z',
+};
+
+// --- geometry --------------------------------------------------------------
+const W = 960;
+// Tall enough that the pipeline boxes never overlap: the per-slot gap is
+// (H - 72) / 3 and must exceed pipeH with breathing room.
+const H = 500;
+
+const hubX = W / 2;
+const hubY = H / 2;
+const hubR = 42;
+
+const inW = 200;
+const inX = 24 + inW / 2;
+const pipeW = 260;
+const pipeX = W - 24 - pipeW / 2;
+
+// Evenly space n nodes vertically around the center.
+const sideY = (i: number, n: number) => {
+	const gap = (H - 72) / Math.max(n, 1);
+	return 36 + gap / 2 + i * gap;
+};
+
+// Point where the line from (nx, ny) meets the hub circle — connectors
+// terminate at the edge instead of piling on the center.
+const hubEdge = (nx: number, ny: number) => {
+	const dx = hubX - nx;
+	const dy = hubY - ny;
+	const dist = Math.hypot(dx, dy);
+	return { x: hubX - (dx / dist) * hubR, y: hubY - (dy / dist) * hubR };
+};
+
+// Smooth horizontal-tangent cubic Bézier between two points.
+const curve = (x1: number, y1: number, x2: number, y2: number) => {
+	const cx = (x1 + x2) / 2;
+	return `M ${x1} ${y1} C ${cx} ${y1}, ${cx} ${y2}, ${x2} ${y2}`;
+};
+
+const inPaths = inputs.map((_, i) => {
+	const y = sideY(i, inputs.length);
+	const edge = hubEdge(inX + inW / 2, y);
+	return curve(inX + inW / 2, y, edge.x, edge.y);
+});
+
+const headerH = 26;
+const pipeH = 130;
+const outPaths = pipelines.map((_, i) => {
+	const y = sideY(i, pipelines.length);
+	const edge = hubEdge(pipeX - pipeW / 2, y);
+	return curve(edge.x, edge.y, pipeX - pipeW / 2, y);
+});
+---
+
+<figure class="lang-routing">
+	<svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={ariaLabel}>
+		<defs>
+			<marker
+				id="lr-arrowhead"
+				markerWidth="7"
+				markerHeight="7"
+				refX="5.5"
+				refY="3"
+				orient="auto"
+			>
+				<path d="M0,0 L6,3 L0,6 Z" fill="rgb(var(--gray))" />
+			</marker>
+		</defs>
+
+		{inPaths.map((d) => <path class="arrow" d={d} marker-end="url(#lr-arrowhead)" />)}
+		{outPaths.map((d) => <path class="arrow" d={d} marker-end="url(#lr-arrowhead)" />)}
+
+		<!-- hub: the detection node -->
+		<circle class="hub" cx={hubX} cy={hubY} r={hubR} />
+		<text class="hub-label" x={hubX} y={hubY} text-anchor="middle" dominant-baseline="central">spellman</text>
+
+		<!-- inputs (left) -->
+		{
+			inputs.map((input, i) => {
+				const y = sideY(i, inputs.length);
+				return (
+					<g class="node">
+						<rect class="in-rect" x={inX - inW / 2} y={y - 26} width={inW} height={52} rx="8" />
+						<g class="in-icon" transform={`translate(${inX - inW / 2 + 16}, ${y - 8})`}>
+							<path d={icons[input.icon]} />
+						</g>
+						<text class="in-label" x={inX - inW / 2 + 42} y={y - 8} dominant-baseline="central">{input.label}</text>
+						<text class="in-sub" x={inX - inW / 2 + 42} y={y + 12} dominant-baseline="central">{input.sub}</text>
+					</g>
+				);
+			})
+		}
+
+		<!-- per-language pipelines (right) -->
+		{
+			pipelines.map((pipe, i) => {
+				const y = sideY(i, pipelines.length);
+				const top = y - pipeH / 2;
+				const rowH = (pipeH - headerH) / pipe.stages.length;
+				return (
+					<g class="node">
+						<rect class="pipe-rect" x={pipeX - pipeW / 2} y={top} width={pipeW} height={pipeH} rx="8" />
+						<text class="pipe-lang" x={pipeX} y={top + 14} text-anchor="middle" dominant-baseline="central">{pipe.lang}</text>
+						{pipe.stages.map((stage, j) => {
+							const rowY = top + headerH + j * rowH;
+							return (
+								<g>
+									{j > 0 && !stage.missing && !pipe.stages[j - 1].missing && <line class="pipe-div" x1={pipeX - pipeW / 2 + 12} y1={rowY} x2={pipeX + pipeW / 2 - 12} y2={rowY} />}
+									{stage.missing && (
+										<rect class="pipe-missing" x={pipeX - pipeW / 2 + 14} y={rowY + 4} width={pipeW - 28} height={rowH - 8} rx="5" />
+									)}
+									<text class:list={["pipe-stage", { missing: stage.missing }]} x={pipeX} y={rowY + rowH / 2} text-anchor="middle" dominant-baseline="central">{stage.text}</text>
+								</g>
+							);
+						})}
+					</g>
+				);
+			})
+		}
+	</svg>
+	{caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<style>
+	.lang-routing {
+		margin: 2em 0;
+	}
+	.lang-routing svg {
+		width: 100%;
+		height: auto;
+		display: block;
+	}
+
+	/* connectors */
+	.arrow {
+		stroke: rgb(var(--gray), 55%);
+		stroke-width: 1.5;
+		fill: none;
+	}
+
+	/* hub — the subject of the post, accent-styled */
+	.hub {
+		fill: var(--accent);
+		stroke: none;
+	}
+	.hub-label {
+		fill: #fff;
+		font-family: var(--font-atkinson);
+		font-size: 15px;
+		font-weight: 700;
+	}
+
+	/* input nodes */
+	.in-rect {
+		fill: #fff;
+		stroke: rgb(var(--gray), 40%);
+		stroke-width: 1.5;
+	}
+	.in-label {
+		fill: rgb(var(--gray-dark));
+		font-family: var(--font-atkinson);
+		font-size: 13px;
+		font-weight: 600;
+	}
+	.in-sub {
+		fill: rgb(var(--gray));
+		font-family: var(--font-atkinson);
+		font-size: 10.5px;
+	}
+	.in-icon {
+		stroke: rgb(var(--gray));
+		stroke-width: 1.4;
+		fill: none;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+		opacity: 0.8;
+	}
+
+	/* pipeline nodes */
+	/* Light only, like the rest of the site: the page has no dark theme, so a
+	   prefers-color-scheme block here turned the boxes dark (and the stage
+	   text white) on a white page. Fills are solid for the same reason. */
+	.pipe-rect {
+		fill: color-mix(in srgb, var(--accent) 4%, #fff);
+		stroke: var(--accent);
+		stroke-width: 1.5;
+	}
+	.pipe-lang {
+		fill: var(--accent);
+		font-family: var(--font-atkinson);
+		font-size: 13px;
+		font-weight: 700;
+	}
+	.pipe-div {
+		stroke: rgb(var(--gray));
+		stroke-width: 1;
+		stroke-dasharray: 2 4;
+		opacity: 0.4;
+	}
+	.pipe-stage {
+		fill: rgb(var(--gray-dark));
+		font-family: var(--font-atkinson);
+		font-size: 11.5px;
+		font-weight: 500;
+		opacity: 0.85;
+	}
+	/* A stage the language has no model for (or no need of): an empty
+	   dashed slot, so the gap in the stack reads as missing, not deleted. */
+	.pipe-stage.missing {
+		fill: rgb(var(--gray));
+		font-style: italic;
+		opacity: 1;
+	}
+	.pipe-missing {
+		fill: #fff;
+		stroke: rgb(var(--gray));
+		stroke-width: 1;
+		stroke-dasharray: 3 3;
+		opacity: 0.8;
+	}
+
+	.lang-routing figcaption {
+		text-align: center;
+		color: rgb(var(--gray));
+		font-size: 0.85em;
+		margin-top: 0.6em;
+	}
+</style>
