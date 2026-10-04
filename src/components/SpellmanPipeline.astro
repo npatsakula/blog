@@ -1,0 +1,190 @@
+---
+// Spellman's inference path, left to right: one walk over the text classifies
+// words (links, mentions, numbers collapse into service tokens) and packs
+// character n-grams, a vectorized pass hashes them into signed table rows,
+// the svod plan gathers and sums int8 rows exactly in i32, and the host
+// applies the per-language scales, mean-pool, bias and softmax. Script
+// routing rides the same walk: kana, Han, Devanagari and Arabic text leaves
+// through the branch below and never reaches the table.
+//
+// Two brackets mark where each stage runs: host-side Rust vs the compiled
+// svod plan. Stage titles and details are localized via Astro.currentLocale;
+// the caption is the translatable sentence.
+
+import { normalizeLocale } from '../i18n/ui';
+
+interface Props {
+	caption?: string;
+}
+const { caption } = Astro.props;
+const locale = normalizeLocale(Astro.currentLocale);
+const en = locale === 'en';
+
+const stages = en
+	? [
+			{ title: 'Words', lines: ['link, @nick, number', '→ service token'] },
+			{ title: 'n-grams', lines: ['chars 1–5 + word', '+ word pair'] },
+			{ title: 'Hash', lines: ['fmix32 → 2¹⁸ rows', 'sign → ±q half'] },
+			{ title: 'Gather', lines: ['int8 rows [q; −q]', '32 columns'] },
+			{ title: 'Sum', lines: ['exact in i32', 'no rounding'] },
+			{ title: 'Answer', lines: ['× scale, ÷ n, + bias', 'softmax → language'] },
+		]
+	: [
+			{ title: 'Слова', lines: ['ссылка, @ник, число', '→ служебный токен'] },
+			{ title: 'n-граммы', lines: ['символы 1–5 + слово', '+ пара слов'] },
+			{ title: 'Хеш', lines: ['fmix32 → 2¹⁸ строк', 'знак → половина ±q'] },
+			{ title: 'Сбор строк', lines: ['int8-строки [q; −q]', '32 столбца'] },
+			{ title: 'Сумма', lines: ['точно, в i32', 'без округлений'] },
+			{ title: 'Ответ', lines: ['× масштаб, ÷ n, + bias', 'softmax → язык'] },
+		];
+
+const hostLabel = en ? 'host, Rust' : 'хост, Rust';
+const planLabel = en ? 'svod plan (JIT)' : 'план svod (JIT)';
+const routeText = en
+	? 'kana · Han · Devanagari · Arabic → language right away, no model'
+	: 'кана · ханьцзы · деванагари · арабица → язык сразу, без модели';
+const ariaLabel = en
+	? 'Spellman inference: words are classified and packed into character n-grams, hashed into signed rows of an int8 table, gathered and summed in i32 by a compiled svod plan, then scaled, averaged and passed through softmax on the host. Text in kana, Han, Devanagari or Arabic script is routed to its language without the model.'
+	: 'Инференс spellman: слова классифицируются и раскладываются на символьные n-граммы, хешируются в строки int8-таблицы со знаком, план svod собирает и суммирует строки в i32, затем хост применяет масштабы, усредняет и считает softmax. Текст на кане, ханьцзы, деванагари или арабице получает язык сразу, без модели.';
+
+// --- geometry --------------------------------------------------------------
+const W = 960;
+const H = 300;
+const n = stages.length;
+const boxW = 132;
+const gap = 28;
+const left = (W - (n * boxW + (n - 1) * gap)) / 2;
+const boxY = 84;
+const boxH = 88;
+const x = (i: number) => left + i * (boxW + gap);
+const cx = (i: number) => x(i) + boxW / 2;
+
+// Brackets above the boxes: host stages 0–2 and 5, the svod plan 3–4.
+const bracketY = 56;
+const brackets = [
+	{ from: 0, to: 2, label: hostLabel, plan: false },
+	{ from: 3, to: 4, label: planLabel, plan: true },
+	{ from: 5, to: 5, label: hostLabel, plan: false },
+];
+
+// Routing branch out of the first stage's walk.
+const routeY = 252;
+---
+
+<figure class="spellman-pipeline">
+	<svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={ariaLabel}>
+		<defs>
+			<marker id="sp-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+				<path d="M0 0 L10 5 L0 10 z" class="arrow-head" />
+			</marker>
+		</defs>
+
+		{brackets.map((b) => {
+			const x1 = x(b.from) + 4;
+			const x2 = x(b.to) + boxW - 4;
+			return (
+				<g class={b.plan ? 'bracket plan' : 'bracket'}>
+					<path d={`M${x1} ${bracketY + 8} V${bracketY} H${x2} V${bracketY + 8}`} />
+					<text x={(x1 + x2) / 2} y={bracketY - 10} text-anchor="middle">{b.label}</text>
+				</g>
+			);
+		})}
+
+		{stages.map((stage, i) => (
+			<g>
+				<rect class={i === 3 || i === 4 ? 'box plan' : 'box'} x={x(i)} y={boxY} width={boxW} height={boxH} rx="8" />
+				<text class="title" x={cx(i)} y={boxY + 26} text-anchor="middle">{stage.title}</text>
+				{stage.lines.map((line, j) => (
+					<text class="detail" x={cx(i)} y={boxY + 50 + j * 17} text-anchor="middle">{line}</text>
+				))}
+				{i < n - 1 && (
+					<line class="arrow" x1={x(i) + boxW + 3} y1={boxY + boxH / 2} x2={x(i + 1) - 3} y2={boxY + boxH / 2} marker-end="url(#sp-arrow)" />
+				)}
+			</g>
+		))}
+
+		{/* the routing branch: decided during the same walk as the first stage */}
+		<path class="arrow route" d={`M${cx(0)} ${boxY + boxH + 3} V${routeY - 6} H${cx(0) + 26}`} marker-end="url(#sp-arrow)" />
+		<text class="route-text" x={cx(0) + 34} y={routeY} dominant-baseline="central">{routeText}</text>
+	</svg>
+	{caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<style>
+	.spellman-pipeline {
+		margin: 2em 0;
+	}
+	.spellman-pipeline svg {
+		width: 100%;
+		height: auto;
+		display: block;
+	}
+
+	.box {
+		fill: color-mix(in srgb, rgb(var(--gray)) 6%, #fff);
+		stroke: rgb(var(--gray));
+		stroke-width: 1.5;
+	}
+	.box.plan {
+		fill: color-mix(in srgb, var(--accent) 7%, #fff);
+		stroke: var(--accent);
+		stroke-width: 2;
+	}
+	.title {
+		fill: rgb(var(--gray-dark));
+		font-family: var(--font-atkinson);
+		font-size: 15px;
+		font-weight: 700;
+	}
+	.detail {
+		fill: rgb(var(--gray-dark));
+		font-family: var(--font-atkinson);
+		font-size: 12px;
+		opacity: 0.78;
+	}
+
+	.arrow {
+		stroke: rgb(var(--gray));
+		stroke-width: 1.5;
+		fill: none;
+	}
+	.arrow.route {
+		stroke-dasharray: 4 4;
+	}
+	.arrow-head {
+		fill: rgb(var(--gray));
+	}
+
+	.bracket path {
+		stroke: rgb(var(--gray));
+		stroke-width: 1.25;
+		fill: none;
+	}
+	.bracket text {
+		fill: rgb(var(--gray));
+		font-family: var(--font-atkinson);
+		font-size: 12px;
+		font-weight: 600;
+		letter-spacing: 0.02em;
+	}
+	.bracket.plan path {
+		stroke: var(--accent);
+	}
+	.bracket.plan text {
+		fill: var(--accent);
+	}
+
+	.route-text {
+		fill: rgb(var(--gray-dark));
+		font-family: var(--font-atkinson);
+		font-size: 13px;
+		opacity: 0.85;
+	}
+
+	.spellman-pipeline figcaption {
+		text-align: center;
+		color: rgb(var(--gray));
+		font-size: 0.85em;
+		margin-top: 0.6em;
+	}
+</style>

@@ -28,11 +28,11 @@ const strings: Record<Locale, {
 			ariaLabel:
 				'Входные данные разной природы (пост, email, сообщение, транскрипция, DLP-перехват) проходят через определение языка Spellman, который маршрутизирует каждый текст в конвейер своего языка: токенизация, POS-разметка, NER там, где есть модель, и поисковая индексация.',
 			inputs: [
-				{ label: 'пост', sub: '@mentions · URL', icon: 'post' },
-				{ label: 'email', sub: 'шапка · подпись', icon: 'mail' },
-				{ label: 'сообщение', sub: 'мессенджер · опечатки', icon: 'chat' },
-				{ label: 'транскрипция', sub: 'ASR · без пунктуации', icon: 'mic' },
-				{ label: 'DLP', sub: 'перехват · смешанное', icon: 'shield' },
+				{ label: 'пост', sub: '«@kek_lord ну и жара 🔥»', icon: 'post' },
+				{ label: 'email', sub: '«Добрый день! Во вложении…»', icon: 'mail' },
+				{ label: 'сообщение', sub: '«щас буду, жди»', icon: 'chat' },
+				{ label: 'транскрипция', sub: '«да короче завтра не смогу»', icon: 'mic' },
+				{ label: 'DLP', sub: '«fwd: договор, see attached»', icon: 'shield' },
 			],
 			pipelines: [
 				{
@@ -58,7 +58,7 @@ const strings: Record<Locale, {
 					stages: [
 						{ text: 'токенизация · стемминг' },
 						{ text: 'POS — не нужен', missing: true },
-						{ text: 'NER —', missing: true },
+						{ text: 'NER — нет модели', missing: true },
 						{ text: 'поисковая индексация' },
 					],
 				},
@@ -75,11 +75,11 @@ const strings: Record<Locale, {
 			ariaLabel:
 				'Inputs of different natures (post, email, message, transcription, DLP intercept) flow through Spellman language detection, which routes each text into a language-specific pipeline: tokenization, POS tagging, NER where a model exists, and search indexing.',
 			inputs: [
-				{ label: 'post', sub: '@mentions · URL', icon: 'post' },
-				{ label: 'email', sub: 'header · signature', icon: 'mail' },
-				{ label: 'message', sub: 'messenger · typos', icon: 'chat' },
-				{ label: 'transcription', sub: 'ASR · no punctuation', icon: 'mic' },
-				{ label: 'DLP', sub: 'intercept · mixed', icon: 'shield' },
+				{ label: 'post', sub: '“@kek_lord so hot today 🔥”', icon: 'post' },
+				{ label: 'email', sub: '“Hello! Please find attached…”', icon: 'mail' },
+				{ label: 'message', sub: '“omw, wait 4 me”', icon: 'chat' },
+				{ label: 'transcription', sub: '“yeah so i cant make it tmrw”', icon: 'mic' },
+				{ label: 'DLP', sub: '“fwd: contract, см. вложение”', icon: 'shield' },
 			],
 			pipelines: [
 				{
@@ -105,7 +105,7 @@ const strings: Record<Locale, {
 					stages: [
 						{ text: 'tokenization · stemming' },
 						{ text: 'POS — not needed', missing: true },
-						{ text: 'NER —', missing: true },
+						{ text: 'NER — no model', missing: true },
 						{ text: 'search indexing' },
 					],
 				},

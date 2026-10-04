@@ -30,13 +30,13 @@ const icons: Record<string, string> = {
 
 // --- geometry --------------------------------------------------------------
 const W = 960;
-// Tall enough that 148px pipeline boxes never overlap: the per-slot gap is
+// Tall enough that the pipeline boxes never overlap: the per-slot gap is
 // (H - 72) / 3 and must exceed pipeH with breathing room.
-const H = 580;
+const H = 500;
 
 const hubX = W / 2;
 const hubY = H / 2;
-const hubR = 48;
+const hubR = 42;
 
 const inW = 200;
 const inX = 24 + inW / 2;
@@ -71,7 +71,7 @@ const inPaths = inputs.map((_, i) => {
 });
 
 const headerH = 26;
-const pipeH = 148;
+const pipeH = 130;
 const outPaths = pipelines.map((_, i) => {
 	const y = sideY(i, pipelines.length);
 	const edge = hubEdge(pipeX - pipeW / 2, y);
@@ -99,7 +99,7 @@ const outPaths = pipelines.map((_, i) => {
 
 		<!-- hub: the detection node -->
 		<circle class="hub" cx={hubX} cy={hubY} r={hubR} />
-		<text class="hub-label" x={hubX} y={hubY} text-anchor="middle" dominant-baseline="central">Spellman</text>
+		<text class="hub-label" x={hubX} y={hubY} text-anchor="middle" dominant-baseline="central">spellman</text>
 
 		<!-- inputs (left) -->
 		{
@@ -111,8 +111,8 @@ const outPaths = pipelines.map((_, i) => {
 						<g class="in-icon" transform={`translate(${inX - inW / 2 + 16}, ${y - 8})`}>
 							<path d={icons[input.icon]} />
 						</g>
-						<text class="in-label" x={inX + 12} y={y - 8} text-anchor="middle" dominant-baseline="central">{input.label}</text>
-						<text class="in-sub" x={inX + 12} y={y + 12} text-anchor="middle" dominant-baseline="central">{input.sub}</text>
+						<text class="in-label" x={inX - inW / 2 + 42} y={y - 8} dominant-baseline="central">{input.label}</text>
+						<text class="in-sub" x={inX - inW / 2 + 42} y={y + 12} dominant-baseline="central">{input.sub}</text>
 					</g>
 				);
 			})
@@ -132,9 +132,9 @@ const outPaths = pipelines.map((_, i) => {
 							const rowY = top + headerH + j * rowH;
 							return (
 								<g>
-									{j > 0 && <line class="pipe-div" x1={pipeX - pipeW / 2 + 12} y1={rowY} x2={pipeX + pipeW / 2 - 12} y2={rowY} />}
+									{j > 0 && !stage.missing && !pipe.stages[j - 1].missing && <line class="pipe-div" x1={pipeX - pipeW / 2 + 12} y1={rowY} x2={pipeX + pipeW / 2 - 12} y2={rowY} />}
 									{stage.missing && (
-										<line class="pipe-missing" x1={pipeX - 64} y1={rowY + rowH / 2} x2={pipeX + 64} y2={rowY + rowH / 2} />
+										<rect class="pipe-missing" x={pipeX - pipeW / 2 + 14} y={rowY + 4} width={pipeW - 28} height={rowH - 8} rx="5" />
 									)}
 									<text class:list={["pipe-stage", { missing: stage.missing }]} x={pipeX} y={rowY + rowH / 2} text-anchor="middle" dominant-baseline="central">{stage.text}</text>
 								</g>
@@ -180,9 +180,8 @@ const outPaths = pipelines.map((_, i) => {
 	/* input nodes */
 	.in-rect {
 		fill: #fff;
-		stroke: rgb(var(--gray-light));
+		stroke: rgb(var(--gray), 40%);
 		stroke-width: 1.5;
-		stroke-dasharray: 4 3;
 	}
 	.in-label {
 		fill: rgb(var(--gray-dark));
@@ -205,8 +204,11 @@ const outPaths = pipelines.map((_, i) => {
 	}
 
 	/* pipeline nodes */
+	/* Light only, like the rest of the site: the page has no dark theme, so a
+	   prefers-color-scheme block here turned the boxes dark (and the stage
+	   text white) on a white page. Fills are solid for the same reason. */
 	.pipe-rect {
-		fill: color-mix(in srgb, var(--accent) 4%, transparent);
+		fill: color-mix(in srgb, var(--accent) 4%, #fff);
 		stroke: var(--accent);
 		stroke-width: 1.5;
 	}
@@ -229,13 +231,19 @@ const outPaths = pipelines.map((_, i) => {
 		font-weight: 500;
 		opacity: 0.85;
 	}
+	/* A stage the language has no model for (or no need of): an empty
+	   dashed slot, so the gap in the stack reads as missing, not deleted. */
 	.pipe-stage.missing {
-		opacity: 0.4;
+		fill: rgb(var(--gray));
+		font-style: italic;
+		opacity: 1;
 	}
 	.pipe-missing {
+		fill: #fff;
 		stroke: rgb(var(--gray));
-		stroke-width: 1.5;
-		opacity: 0.55;
+		stroke-width: 1;
+		stroke-dasharray: 3 3;
+		opacity: 0.8;
 	}
 
 	.lang-routing figcaption {
@@ -243,25 +251,5 @@ const outPaths = pipelines.map((_, i) => {
 		color: rgb(var(--gray));
 		font-size: 0.85em;
 		margin-top: 0.6em;
-	}
-
-	@media (prefers-color-scheme: dark) {
-		.in-rect {
-			fill: rgb(var(--gray-dark));
-			stroke: rgb(var(--gray));
-		}
-		.in-label {
-			fill: #fff;
-		}
-		.pipe-rect {
-			fill: color-mix(in srgb, var(--accent-dark) 30%, transparent);
-			stroke: var(--accent);
-		}
-		.pipe-lang {
-			fill: var(--accent);
-		}
-		.pipe-stage {
-			fill: #fff;
-		}
 	}
 </style>
