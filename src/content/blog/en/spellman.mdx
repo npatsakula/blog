@@ -1,7 +1,7 @@
 ---
 title: 'Spellman'
 description: 'Building the best language detector for Cyrillic.'
-pubDate: '2026.08.26'
+pubDate: '2026.10.04'
 ---
 
 import LanguagePipelineRouting from '../../../components/LanguagePipelineRouting.astro';
@@ -395,18 +395,20 @@ to ours.
 
 | set | mode | spellman | GlotLID v3 | fastText lid.176 |
 |---|---|---|---|---|
-| held-out mix (368,507, clean test) | text | **97.52%** | 90.47% | 81.46% |
-| Tatoeba (37,051, held-out sentences) | word / pair / triple | **69.25 / 87.47 / 93.84** | 43.9 / 79.3 / 91.9 | 59.0 / 79.0 / 87.9 |
-| Tatoeba (37,051, held-out sentences) | text | 98.64% | **99.25%** | 94.90% |
-| Russian tweets (2,606, wild register, verified labels) | text | **93.28%** | 82.73% | 90.41% |
-| COSMUS (2,808, wild Russian: Telegram/reviews, hand-labeled) | text | **96.69%** | 95.69% | 96.65% |
-| short replies (574, ≤19 characters, certified by spelling) | text | **90.24%** | 71.25% | 84.32% |
+| held-out mix (718,647, test split after the filters) | text | **98.74%** | 92.92% | 81.97% |
+| Tatoeba (37,051, held-out sentences) | word / pair / triple | **72.04 / 89.78 / 95.37** | 43.9 / 79.3 / 91.9 | 59.0 / 79.0 / 87.9 |
+| Tatoeba (37,051, held-out sentences) | text | 99.08% | **99.25%** | 94.90% |
+| Russian tweets (2,606, wild register, verified labels) | text | **96.55%** | 82.73% | 90.41% |
+| COSMUS (2,713, wild Russian: Telegram/reviews, hand-labeled) | text | 99.15% | 98.82% | **99.37%** |
+| short replies (574, ≤19 characters, certified by spelling) | text | **95.82%** | 71.25% | 84.32% |
+| literary Russian (2,000 sentences from a held-out novel) | text | 98.40% | — | — |
 
 How to read the table. Tatoeba is clean sentences; these 37,000 are excluded from training, though the rest of Tatoeba
 is in the mix. Here GlotLID comes out on top thanks to
 the sheer volume of its data, and its 99.25% is the honest ceiling for this regime. But the "wild" rows (Russian tweets
 with @mentions, links and Latin-script inserts, Telegram and reviews with hand labels) are a register that simply doesn't
-exist in clean corpora, and there the picture flips: on tweets spellman leads GlotLID by 11 points and lid.176 by almost three. Short replies are a pain of their own:
+exist in clean corpora, and there the picture flips: on tweets spellman leads GlotLID by almost 14 points and lid.176 by six. On COSMUS all
+three hit a ceiling around 99%, and lid.176 is slightly ahead there. Short replies are a pain of their own:
 they can't be certified by models (a soft consensus of judges itself confuses short Ukrainian with Russian), so each
 row's correctness is guaranteed by spelling: the letters *і ї є ґ* don't occur in Russian, and *ы ъ ё э* don't occur in Ukrainian.
 
