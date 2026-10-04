@@ -206,19 +206,6 @@ const ariaLabel =
 		font-weight: 700;
 	}
 
-	@media (prefers-color-scheme: dark) {
-		.node-rect {
-			fill: rgb(var(--gray-dark));
-			stroke: rgb(var(--gray));
-		}
-		.node-label {
-			fill: #fff;
-		}
-		.node-rect.featured {
-			fill: rgb(var(--accent-dark));
-		}
-		.node-label.featured {
-			fill: #fff;
-		}
-	}
+	/* Light only, like the rest of the site: the page has no dark theme, so a
+	   prefers-color-scheme block here painted dark boxes onto a white page. */
 </style>
