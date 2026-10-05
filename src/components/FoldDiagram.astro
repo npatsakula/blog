@@ -1,0 +1,182 @@
+---
+// The algebraic fold, without notation: during training every n-gram's
+// 128-number embedding row is averaged over the text and then multiplied by
+// the 128×30 head W; because averaging and multiplying by W commute, every
+// row is multiplied by W once after training, and inference averages ready
+// 30-number rows instead. Two lanes, same input and same output, with the
+// one-off multiplication shown as the bridge between them.
+//
+// Light only and solid fills, like the other diagrams on the site.
+
+import { normalizeLocale } from '../i18n/ui';
+
+interface Props {
+	caption?: string;
+}
+const { caption } = Astro.props;
+const en = normalizeLocale(Astro.currentLocale) === 'en';
+
+const t = en
+	? {
+			train: 'training',
+			infer: 'inference',
+			ngrams: ['text n-grams', 'one row each'],
+			embed: ['embedding row', '128 numbers'],
+			mean: ['average', 'over the text'],
+			head: ['× W', '128 → 30'],
+			scores: ['30 scores', 'one per language'],
+			folded: ['folded row', '30 numbers'],
+			bridge: ['after training,', 'every row × W, once'],
+			aria: 'Training averages 128-number embedding rows of the text and multiplies the average by the matrix W to get 30 language scores. Since averaging and multiplying by W can be swapped, every row is multiplied by W once after training, and inference only averages ready 30-number rows.',
+		}
+	: {
+			train: 'обучение',
+			infer: 'инференс',
+			ngrams: ['n-граммы текста', 'по строке на каждую'],
+			embed: ['строка эмбеддингов', '128 чисел'],
+			mean: ['среднее', 'по всему тексту'],
+			head: ['× W', '128 → 30'],
+			scores: ['30 оценок', 'по одной на язык'],
+			folded: ['готовая строка', '30 чисел'],
+			bridge: ['после обучения', 'каждая строка × W, один раз'],
+			aria: 'При обучении строки эмбеддингов текста по 128 чисел усредняются, а среднее умножается на матрицу W и даёт 30 оценок языков. Усреднение и умножение на W можно поменять местами, поэтому после обучения каждая строка один раз умножается на W, и на инференсе остаётся только усреднить готовые строки по 30 чисел.',
+		};
+
+// --- geometry --------------------------------------------------------------
+const W = 960;
+const H = 300;
+const boxW = 150;
+const boxH = 58;
+const laneLabelW = 90;
+const left = 24 + laneLabelW;
+const gap = (W - left - 24 - 5 * boxW) / 4;
+const x = (i: number) => left + i * (boxW + gap);
+const cx = (i: number) => x(i) + boxW / 2;
+const trainY = 40;
+const inferY = 196;
+
+// Training lane: all five steps. Inference lane: no "× W" step — its slot
+// stays empty, which is the whole point of the fold.
+const trainBoxes = [t.ngrams, t.embed, t.mean, t.head, t.scores];
+const inferBoxes: (string[] | null)[] = [t.ngrams, t.folded, t.mean, null, t.scores];
+---
+
+<figure class="fold">
+	<svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={t.aria}>
+		<defs>
+			<marker id="fold-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+				<path d="M0 0 L10 5 L0 10 z" class="arrow-head" />
+			</marker>
+		</defs>
+
+		<text class="lane" x={24} y={trainY + boxH / 2} dominant-baseline="central">{t.train}</text>
+		<text class="lane accent" x={24} y={inferY + boxH / 2} dominant-baseline="central">{t.infer}</text>
+
+		{trainBoxes.map((b, i) => (
+			<g>
+				<rect class={i === 3 ? 'box head' : 'box'} x={x(i)} y={trainY} width={boxW} height={boxH} rx="8" />
+				<text class="title" x={cx(i)} y={trainY + 22} text-anchor="middle">{b[0]}</text>
+				<text class="detail" x={cx(i)} y={trainY + 41} text-anchor="middle">{b[1]}</text>
+				{i < 4 && <line class="arrow" x1={x(i) + boxW + 3} y1={trainY + boxH / 2} x2={x(i + 1) - 3} y2={trainY + boxH / 2} marker-end="url(#fold-arrow)" />}
+			</g>
+		))}
+
+		{/* inference lane: "× W" is skipped, the arrow runs straight past its slot */}
+		{inferBoxes.map((b, i) =>
+			b ? (
+				<g>
+					<rect class="box plan" x={x(i)} y={inferY} width={boxW} height={boxH} rx="8" />
+					<text class="title" x={cx(i)} y={inferY + 22} text-anchor="middle">{b[0]}</text>
+					<text class="detail" x={cx(i)} y={inferY + 41} text-anchor="middle">{b[1]}</text>
+				</g>
+			) : (
+				<rect class="slot" x={x(i)} y={inferY} width={boxW} height={boxH} rx="8" />
+			),
+		)}
+		<line class="arrow" x1={x(0) + boxW + 3} y1={inferY + boxH / 2} x2={x(1) - 3} y2={inferY + boxH / 2} marker-end="url(#fold-arrow)" />
+		<line class="arrow" x1={x(1) + boxW + 3} y1={inferY + boxH / 2} x2={x(2) - 3} y2={inferY + boxH / 2} marker-end="url(#fold-arrow)" />
+		<line class="arrow" x1={x(2) + boxW + 3} y1={inferY + boxH / 2} x2={x(4) - 3} y2={inferY + boxH / 2} marker-end="url(#fold-arrow)" />
+
+		{/* the bridge: W meets every embedding row once, after training */}
+		<path class="arrow bridge" d={`M${cx(3)} ${trainY + boxH + 3} V${(trainY + boxH + inferY) / 2} H${cx(1)} V${inferY - 3}`} marker-end="url(#fold-arrow)" />
+		{t.bridge.map((line, i) => (
+			<text class="bridge-text" x={(cx(1) + cx(3)) / 2} y={(trainY + boxH + inferY) / 2 - 26 + i * 16} text-anchor="middle">{line}</text>
+		))}
+	</svg>
+	{caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<style>
+	.fold {
+		margin: 2em 0;
+	}
+	.fold svg {
+		width: 100%;
+		height: auto;
+		display: block;
+	}
+	.box {
+		fill: color-mix(in srgb, rgb(var(--gray)) 6%, #fff);
+		stroke: rgb(var(--gray));
+		stroke-width: 1.5;
+	}
+	.box.head {
+		stroke-width: 2;
+	}
+	.box.plan {
+		fill: color-mix(in srgb, var(--accent) 7%, #fff);
+		stroke: var(--accent);
+		stroke-width: 2;
+	}
+	.slot {
+		fill: #fff;
+		stroke: rgb(var(--gray));
+		stroke-width: 1;
+		stroke-dasharray: 3 3;
+		opacity: 0.6;
+	}
+	.title {
+		fill: rgb(var(--gray-dark));
+		font-family: var(--font-atkinson);
+		font-size: 14px;
+		font-weight: 700;
+	}
+	.detail {
+		fill: rgb(var(--gray-dark));
+		font-family: var(--font-atkinson);
+		font-size: 12px;
+		opacity: 0.78;
+	}
+	.lane {
+		fill: rgb(var(--gray));
+		font-family: var(--font-atkinson);
+		font-size: 13px;
+		font-weight: 700;
+	}
+	.lane.accent {
+		fill: var(--accent);
+	}
+	.arrow {
+		stroke: rgb(var(--gray));
+		stroke-width: 1.5;
+		fill: none;
+	}
+	.arrow.bridge {
+		stroke: var(--accent);
+		stroke-dasharray: 4 4;
+	}
+	.arrow-head {
+		fill: rgb(var(--gray));
+	}
+	.bridge-text {
+		fill: var(--accent);
+		font-family: var(--font-atkinson);
+		font-size: 13px;
+	}
+	.fold figcaption {
+		text-align: center;
+		color: rgb(var(--gray));
+		font-size: 0.85em;
+		margin-top: 0.6em;
+	}
+</style>
