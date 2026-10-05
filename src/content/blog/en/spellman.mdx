@@ -8,6 +8,7 @@ import LanguagePipelineRouting from '../../../components/LanguagePipelineRouting
 import VegaLite from '../../../components/VegaLite.astro';
 import SpellmanPipeline from '../../../components/SpellmanPipeline.astro';
 import FoldDiagram from '../../../components/FoldDiagram.astro';
+import CharPacking from '../../../components/CharPacking.astro';
 
 ## Why detect language at all
 
@@ -259,7 +260,7 @@ text was voting for Bulgarian. The HPLT Tajik corpus turned out to be a third Uz
 **Latin script goes to fastText.** Sometimes a row is labelled with a Cyrillic language but written in Latin script,
 for example an English page that ended up in the Bulgarian section of a web corpus. There's no point asking my own
 model about it: it learned from that very data and got used to calling such English Bulgarian. So rows written mostly
-in Latin script are checked by an outside detector, fastText lid.176, which knows the big Latin-script languages well.
+in Latin script are checked by an outside detector, fastText lid.176, which knows the big languages written in Latin script well.
 
 **The model doesn't judge twins.** Within groups of closely related languages (Russian, Ukrainian, Belarusian; Bulgarian,
 Macedonian, Serbian; the Turkic languages; the Permic languages), a confident prediction can't be trusted. The letter `җ`
@@ -492,20 +493,23 @@ ordinary word. Everything except ordinary words becomes a single placeholder tok
 a handful of identical features instead of a hundred-plus n-grams of its own, and no longer shouts over the two real words
 next to it. This step alone raised accuracy on Russian tweets from 72.5% to 92.4%.
 
-An ordinary word is broken into character n-grams from one to five characters long, with word-start and word-end markers.
-Each character takes 21 bits, so the last three characters fit whole into one 64-bit number: keys for n-grams of up
-to three characters are parts of that number cut out with masks, and 4- and 5-grams take the whole number. Shift the
-number by one character, apply the masks, get the keys, with no strings and no allocations. On top of these
-come the whole word and the pair of adjacent words: close languages share an alphabet but differ in vocabulary, and words
-have something to say where the n-grams coincide.
-
-Along the way, in the same pass, the detector counts which scripts the letters belong to. Japanese, Chinese, Hindi and
+In the same pass, the detector counts which scripts the letters belong to. Japanese, Chinese, Hindi and
 Arabic are the only languages of the 30 with a script of their own: no other language on the list writes kana, Chinese
 characters, Devanagari or Arabic script. So here the script itself is the answer: kana means Japanese, a majority of
 Chinese characters means Chinese. Texts like these get their language immediately and never reach the model. Building
 n-grams for them would be not just unnecessary but harmful: Chinese and Japanese have thousands of characters and no
 spaces between words, and their n-grams would take table space that the close Cyrillic languages need, for an answer
 that is already known.
+
+An ordinary word is broken into character n-grams from one to five characters long, with word-start and word-end markers.
+No strings are built for them: characters are shifted into a 64-bit number one by one. Each new character shifts the
+number by 21 bits (enough for any Unicode character) and lands at its end, so the number always holds the last three
+characters. A unigram, bigram and trigram are its lowest 21, 42 and 63 bits, cut out with a mask; 4- and 5-grams take
+the whole number. No strings, no allocations, just a shift and a mask. On top of the n-grams
+come the whole word and the pair of adjacent words: close languages share an alphabet but differ in vocabulary, and words
+have something to say where the n-grams coincide.
+
+<CharPacking caption="N-gram keys are masks of a single 64-bit number: no strings are built, nothing is allocated." />
 
 The keys are hashed into 2¹⁸ (262,144) table rows, and one more bit of the hash gives the sign with which the key enters
 the sum: that way collisions cancel each other out on average instead of piling up. Hashing runs as a separate pass over

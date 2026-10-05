@@ -1,0 +1,195 @@
+---
+// The rolling n-gram packer: one 64-bit register per word, shifted left by
+// 21 bits per character (enough for any Unicode codepoint), so it always
+// holds the last three characters whole plus 1 bit of the one before them.
+// Uni-, bi- and trigram keys are its low 21/42/63 bits cut out with a mask;
+// 4- and 5-grams take the whole register. Brackets are labelled by the
+// n-gram they hold, not by bit ranges: the reader should see «р», «ир»,
+// «мир», not masks. Shown on «мир» (with word-start
+// and word-end markers) right after «р»; the Cyrillic stays in both locales,
+// it is the real input.
+//
+// Light only and solid fills, like the other diagrams on the site.
+
+import { normalizeLocale } from '../i18n/ui';
+
+interface Props {
+	caption?: string;
+}
+const { caption } = Astro.props;
+const en = normalizeLocale(Astro.currentLocale) === 'en';
+
+const t = en
+	? {
+			chars: ['м', 'и', 'р'],
+			next: '›',
+			nextLabel: ['next:', 'word end'],
+			shift: 'every character shifts the number left by 21 bits',
+			sliver: ['word', 'start ‹:', '1 bit left'],
+			bits: '21 bits',
+			keys: [['р', 'unigram'], ['ир', 'bigram'], ['мир', 'trigram'], ['‹мир', '4- and 5-grams, ‹ is cut off']],
+			aria: 'A 64-bit number holds the last three characters of a word, 21 bits each, plus one bit of the character before them. Every new character shifts the number left by 21 bits. Unigram, bigram and trigram keys are the low 21, 42 and 63 bits; 4- and 5-grams take the whole number.',
+		}
+	: {
+			chars: ['м', 'и', 'р'],
+			next: '›',
+			nextLabel: ['следующий:', 'конец слова'],
+			shift: 'каждый символ сдвигает число влево на 21 бит',
+			sliver: ['от начала', 'слова ‹', 'остался 1 бит'],
+			bits: '21 бит',
+			keys: [['р', 'униграмма'], ['ир', 'биграмма'], ['мир', 'триграмма'], ['‹мир', '4- и 5-граммы, ‹ обрезан']],
+			aria: 'В 64-битном числе лежат три последних символа слова по 21 биту и один бит символа перед ними. Каждый новый символ сдвигает число влево на 21 бит. Ключи униграммы, биграммы и триграммы — младшие 21, 42 и 63 бита, 4- и 5-граммы берут число целиком.',
+		};
+
+// --- geometry --------------------------------------------------------------
+const W = 960;
+const bit = 9.5; // px per bit
+const x0 = 96; // left edge of the 64-bit number
+const x = (b: number) => x0 + (64 - b) * bit; // x of bit boundary b (64 = left edge, 0 = right edge)
+const barY = 52;
+const barH = 60;
+const slots = [2, 1, 0].map((k, i) => ({ ch: t.chars[i], x1: x(21 * (k + 1)), x2: x(21 * k) }));
+const nextX = x(0) + 48;
+const nextW = 52;
+const rowY = barY + barH + 34;
+const rowStep = 34;
+// Brackets for the keys, shortest first: low 21, 42, 63 bits, then all 64.
+const keys = [21, 42, 63, 64].map((b, i) => ({ label: t.keys[i], x1: x(b), x2: x(0), y: rowY + i * rowStep }));
+const H = rowY + 3 * rowStep + 16;
+---
+
+<figure class="packing">
+	<svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={t.aria}>
+		<defs>
+			<marker id="pk-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+				<path d="M0 0 L10 5 L0 10 z" class="arrow-head" />
+			</marker>
+			<marker id="pk-arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+				<path d="M0 0 L10 5 L0 10 z" class="arrow-head accent" />
+			</marker>
+		</defs>
+
+		{/* the shift: everything moves left by one character */}
+		<line class="arrow" x1={x(0)} y1={26} x2={x(64)} y2={26} marker-end="url(#pk-arrow)" />
+		<text class="note" x={(x(0) + x(64)) / 2} y={18} text-anchor="middle">{t.shift}</text>
+
+		{/* the number: 1 leftover bit + three whole characters */}
+		<rect class="sliver" x={x(64)} y={barY} width={bit} height={barH} />
+		{slots.map((s) => (
+			<g>
+				<rect class="slot" x={s.x1} y={barY} width={s.x2 - s.x1} height={barH} />
+				<text class="char" x={(s.x1 + s.x2) / 2} y={barY + 28} text-anchor="middle">{s.ch}</text>
+				<text class="detail" x={(s.x1 + s.x2) / 2} y={barY + 48} text-anchor="middle">{t.bits}</text>
+			</g>
+		))}
+		<rect class="frame" x={x(64)} y={barY} width={x(0) - x(64)} height={barH} rx="4" />
+		{t.sliver.map((line, i) => (
+			<text class="note" x={x(64) - 10} y={barY + barH / 2 - 16 + i * 16} text-anchor="end" dominant-baseline="central">{line}</text>
+		))}
+
+		{/* the next character enters at the low end */}
+		<rect class="next" x={nextX} y={barY + 4} width={nextW} height={barH - 8} rx="8" />
+		<text class="char accent" x={nextX + nextW / 2} y={barY + barH / 2} text-anchor="middle" dominant-baseline="central">{t.next}</text>
+		<line class="arrow accent" x1={nextX - 4} y1={barY + barH / 2} x2={x(0) + 6} y2={barY + barH / 2} marker-end="url(#pk-arrow-accent)" />
+		{t.nextLabel.map((line, i) => (
+			<text class="note accent" x={nextX + nextW / 2} y={barY - 26 + i * 16} text-anchor="middle">{line}</text>
+		))}
+
+		{/* keys: masks of the low end, or the whole number */}
+		{keys.map((k) => (
+			<g class="key">
+				<path d={`M${k.x1 + 1} ${k.y - 8} V${k.y} H${k.x2 - 1} V${k.y - 8}`} />
+				<text x={k.x2 + 14} y={k.y - 4} dominant-baseline="central"><tspan class="gram">{k.label[0]}</tspan> — {k.label[1]}</text>
+			</g>
+		))}
+	</svg>
+	{caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<style>
+	.packing {
+		margin: 1.5em 0;
+	}
+	.packing svg {
+		width: 100%;
+		height: auto;
+		display: block;
+	}
+	.slot {
+		fill: color-mix(in srgb, rgb(var(--gray)) 6%, #fff);
+		stroke: rgb(var(--gray));
+		stroke-width: 1;
+	}
+	.sliver {
+		fill: color-mix(in srgb, rgb(var(--gray)) 30%, #fff);
+	}
+	.frame {
+		fill: none;
+		stroke: rgb(var(--gray));
+		stroke-width: 1.5;
+	}
+	.next {
+		fill: color-mix(in srgb, var(--accent) 7%, #fff);
+		stroke: var(--accent);
+		stroke-width: 2;
+	}
+	.char {
+		fill: rgb(var(--gray-dark));
+		font-family: var(--font-atkinson);
+		font-size: 22px;
+		font-weight: 700;
+	}
+	.char.accent {
+		fill: var(--accent);
+	}
+	.detail {
+		fill: rgb(var(--gray-dark));
+		font-family: var(--font-atkinson);
+		font-size: 12px;
+		opacity: 0.78;
+	}
+	.note {
+		fill: rgb(var(--gray));
+		font-family: var(--font-atkinson);
+		font-size: 13px;
+	}
+	.note.accent {
+		fill: var(--accent);
+	}
+	.key path {
+		stroke: rgb(var(--gray));
+		stroke-width: 1.5;
+		fill: none;
+	}
+	.key text {
+		fill: rgb(var(--gray));
+		font-family: var(--font-atkinson);
+		font-size: 13px;
+	}
+	.key .gram {
+		fill: rgb(var(--gray-dark));
+		font-size: 15px;
+		font-weight: 700;
+	}
+	.arrow {
+		stroke: rgb(var(--gray));
+		stroke-width: 1.5;
+		fill: none;
+	}
+	.arrow.accent {
+		stroke: var(--accent);
+		stroke-width: 2;
+	}
+	.arrow-head {
+		fill: rgb(var(--gray));
+	}
+	.arrow-head.accent {
+		fill: var(--accent);
+	}
+	.packing figcaption {
+		text-align: center;
+		color: rgb(var(--gray));
+		font-size: 0.85em;
+		margin-top: 0.6em;
+	}
+</style>
