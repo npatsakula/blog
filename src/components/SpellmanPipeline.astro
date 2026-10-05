@@ -49,26 +49,26 @@ const ariaLabel = en
 
 // --- geometry --------------------------------------------------------------
 const W = 960;
-const H = 300;
+const boxW = 136;
+const gap = 24;
 const n = stages.length;
-const boxW = 132;
-const gap = 28;
 const left = (W - (n * boxW + (n - 1) * gap)) / 2;
-const boxY = 84;
+const bracketY = 30;
+const boxY = 54;
 const boxH = 88;
 const x = (i: number) => left + i * (boxW + gap);
 const cx = (i: number) => x(i) + boxW / 2;
 
 // Brackets above the boxes: host stages 0–2 and 5, the svod plan 3–4.
-const bracketY = 56;
 const brackets = [
 	{ from: 0, to: 2, label: hostLabel, plan: false },
 	{ from: 3, to: 4, label: planLabel, plan: true },
 	{ from: 5, to: 5, label: hostLabel, plan: false },
 ];
 
-// Routing branch out of the first stage's walk.
-const routeY = 252;
+// Routing branch out of the first stage's walk, right under the boxes.
+const routeY = boxY + boxH + 30;
+const H = routeY + 14;
 ---
 
 <figure class="spellman-pipeline">
@@ -104,15 +104,15 @@ const routeY = 252;
 		))}
 
 		{/* the routing branch: decided during the same walk as the first stage */}
-		<path class="arrow route" d={`M${cx(0)} ${boxY + boxH + 3} V${routeY - 6} H${cx(0) + 26}`} marker-end="url(#sp-arrow)" />
-		<text class="route-text" x={cx(0) + 34} y={routeY} dominant-baseline="central">{routeText}</text>
+		<path class="arrow route" d={`M${cx(0)} ${boxY + boxH + 3} V${routeY} H${cx(0) + 22}`} marker-end="url(#sp-arrow)" />
+		<text class="route-text" x={cx(0) + 30} y={routeY} dominant-baseline="central">{routeText}</text>
 	</svg>
 	{caption && <figcaption>{caption}</figcaption>}
 </figure>
 
 <style>
 	.spellman-pipeline {
-		margin: 2em 0;
+		margin: 1.5em 0;
 	}
 	.spellman-pipeline svg {
 		width: 100%;

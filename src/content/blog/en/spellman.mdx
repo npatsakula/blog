@@ -7,6 +7,9 @@ pubDate: '2026.10.04'
 import LanguagePipelineRouting from '../../../components/LanguagePipelineRouting.astro';
 import VegaLite from '../../../components/VegaLite.astro';
 import SpellmanPipeline from '../../../components/SpellmanPipeline.astro';
+import FoldDiagram from '../../../components/FoldDiagram.astro';
+import CharPacking from '../../../components/CharPacking.astro';
+import Term from '../../../components/Term.astro';
 
 ## Why detect language at all
 
@@ -20,21 +23,30 @@ Each of these processors is a combination of specialized models and Rust code. W
 these tasks: they need very expensive hardware, they slow processing down, and on "wild" text they score
 worse than specialized solutions.
 
-But how do you know which set of processors to apply to a document? We used to rely on open solutions
-like Google CLD3 and Whichlang, but their detection quality was such that the customer was losing up to
-eight percent of documents.
+But how do you know which set of processors to apply to a document? By its language: every language has its own
+tokenizer, its own morphology and its own named-entity models, so processing a document starts with detecting its
+language. A mistake here is expensive: the document goes into the wrong pipeline, and search never finds it afterwards.
+We used to rely on open solutions like Google CLD3 and Whichlang, but their detection quality was such that the
+customer was losing up to eight percent of documents.
 
 <LanguagePipelineRouting />
 
-Why would anyone need this outside our pipeline? For roughly the same reasons: to find out what language
-a user typed in; to use the language to search or filter documents; as a helper for translation.
+Why would anyone need this outside our pipeline? It's the same decision: use the language of a text to choose what
+to do with it next. An interface replies in the language the user wrote in, search picks the dictionary and filters
+documents by language, a translator learns which language it's translating from.
+
+The detector this post is about, spellman, tells apart 30 languages, and 21 of them are written in Cyrillic: Russian,
+Ukrainian and Belarusian; Bulgarian, Macedonian and Serbian; Kazakh, Kyrgyz, Uzbek, Tatar, Bashkir, Chuvash, Yakut
+and Tuvan; Tajik, Mongolian, Ossetian, Chechen, Udmurt, Mari and Komi. On top of those come five big languages written
+in Latin script (English, Spanish, French, Portuguese and German) and four languages with a script of their own:
+Chinese, Japanese, Hindi and Arabic.
 
 ## What's already out there
 
 Outside the Rust ecosystem, language detection standardized long ago on [fastText](https://fasttext.cc)-style models:
 a linear classifier over averaged [hashed](https://en.wikipedia.org/wiki/Feature_hashing) n-gram embeddings
 ([Bag of Tricks](https://arxiv.org/abs/1607.01759), Joulin et al. 2016). There are two reference points here: the veteran
-that is still the de facto standard, and the current SOTA among open models.
+that is still the de facto standard, and the current <Term tip="State of the art: the best result known today.">SOTA</Term> among open models.
 
 #### fastText lid.176
 
@@ -118,7 +130,7 @@ finite-state transducer of n-grams, 3 to 5.5 MB per language, and it looks up ev
 in the model of every candidate language, retrying with a shorter n-gram on a miss. A lookup in such a transducer is
 a chain of dependent reads at unpredictable addresses: you can't read the next node until you've read the previous one.
 Even after the alphabet filter, Cyrillic text leaves eight candidate languages, about 36 MB of models, tens of times
-larger than a single core's L2. So at best every lookup step goes to L3, which is several times slower, and the CPU can't
+larger than a single core's <Term tip="CPU caches. L2 is small and fast, one per core; L3 is bigger and slower, shared by the cores. Main memory is slower still.">L2</Term>. So at best every lookup step goes to L3, which is several times slower, and the CPU can't
 parallelize dependent reads. And even where L3 is big enough, lingua takes up almost all of it, evicting the data of
 whatever runs on the neighboring cores.
 
@@ -126,7 +138,7 @@ By the author's own measurements, lingua in high-accuracy mode takes ~640 ms to 
 ~4.5 ms for whichlang, a two-orders-of-magnitude gap. That's why lingua is a poor fit not only for real-time requests
 but also for batch processing on shared servers: it isn't the only thing it slows down. Of spellman's 30 languages lingua knows 17, eight of them Cyrillic: more than whatlang,
 Kazakh and Mongolian included, but none of the smaller languages: no Chuvash, no Udmurt, no Yakut, no Chechen. And most importantly, lingua also
-loses on close pairs in the "wild" register: its models are trained on clean corpora, and Russian in tweets with @mentions
+loses on close pairs in "wild" text: its models are trained on clean corpora, and Russian in tweets with @mentions
 and Latin-script inserts gets labeled noticeably worse than tidy sentences.
 
 #### CLD2/CLD3 bindings
@@ -145,16 +157,17 @@ related Cyrillic languages on short, "real" social media text, and that's the ni
 The history of language detection is longer than the history of any one architecture. First came dictionaries ("the text
 contains the word *привет*, so it's Russian") and heuristics: script tables, unique letters, stop-word lists. Then came
 statistics: in 1994 Cavnar and Trenkle compared frequency profiles of character n-grams, followed by naive Bayes,
-logistic regression, fastText. Scorers came and went, but the features stayed the same: character n-grams have been
+logistic regression, fastText. <Term tip="The scorer is the part of a detector that turns the text's features into a score for every language; the highest score wins.">Scorers</Term> came and went, but the features stayed the same: character n-grams have been
 powering language detectors for thirty years now.
 
 The modern answer is almost insultingly simple: hashed character n-grams with a
 [linear classifier](https://en.wikipedia.org/wiki/Linear_classifier) on top. In the Rust ecosystem this scheme was
 demonstrated by [whichlang](https://github.com/quickwit-oss/whichlang), and I took it as my starting point. Spellman trains
-a bit differently, fastText-style, via averaged embeddings and a linear head, but after training both matrices are folded
-into a single table `P = E·W`, and at inference time it's the same linear scorer: add up the table rows for the text's n-grams.
+a bit differently, fastText-style, via averaged <Term tip="An embedding is a learned vector of numbers for each feature; here, 128 numbers per n-gram.">embeddings</Term> and a linear layer, but after training the model folds into a single
+table (how exactly is in "How the detector works"), and at inference time it's the same linear scorer: add up the table
+rows for the text's n-grams.
 No deep learning, no linguistic knowledge inside the model, and microseconds on a CPU. All very much in the spirit of
-Sutton's [bitter lesson](http://www.incompleteideas.net/Notes/BitterLesson.html): learned statistics beat rules a human
+Sutton's [bitter lesson](http://www.incompleteideas.net/IncIdeas/BitterLesson.html): learned statistics beat rules a human
 wrote in by hand.
 
 Hence the main thesis: **the scorer is a solved problem**, you can take it off the shelf. Accuracy comes down to features and data.
@@ -162,7 +175,7 @@ I did have to rework the features: for example, just replacing links, @mentions 
 raised accuracy on real Russian tweets from 72.5% to 92.4%. But even good features won't save a model trained on bad
 data, and data has exactly two failure modes, both of which poison a detector quietly, without leaving obvious traces in the metrics:
 
-1. **Not enough diversity.** The corpus is big but uniform: one register, one domain, tidy sentences from encyclopedias
+1. **Not enough diversity.** The corpus is big but uniform: one style, one topic, tidy sentences from encyclopedias
    or, worse, machine translation. The detector aces the exam and falls over on real traffic: tweets, comments,
    search queries.
 2. **Garbage, i.e. wrong labels.** Foreign text inside a language's corpus, mixed-up annotations, close pairs bleeding
@@ -170,7 +183,7 @@ data, and data has exactly two failure modes, both of which poison a detector qu
    from which the model confidently learns the wrong boundaries.
 
 So the scorer is the easy ten percent of the work, and the other ninety goes into data: sources and licenses, cleaning
-and protecting the borderline examples, diversity of registers and lengths, honest referee sets.
+and protecting the borderline examples, diversity of styles and lengths, honest referee sets.
 
 ### Commercial use
 
@@ -190,25 +203,24 @@ what you can actually build on in the data section.
 
 By data quality I mean three things.
 
-**Text diversity.** The training set has to cover the registers the detector will actually work in: social media
+**Text diversity.** The training set has to cover the types of text the detector will actually work with: social media
 and comments, news, literature, user queries. A corpus made only of news sentences produces a detector that has never
 seen a typo, slang or a sentence fragment, and that on its very first real tweet behaves like a straight-A student
 showing up on a construction site for the first time.
 
-**Natural contamination.** Real text isn't sterile: company and product names in Latin script are sprinkled into
-Cyrillic sentences, @mentions and links sit right next to words, emoji frame one-and-a-half-word replies.
-This isn't noise to be scrubbed out; it's the environment in which the decision has to be made. Nor is it the garbage
-from the list above: garbage is a wrong label, text tagged with the wrong language, while contamination is natural text
-with the right label. A Russian sentence with "iPhone" in it is still Russian. So this reality has to be present
-in the training data: a detector that has only seen clean sentences will vote by the link at the end of a tweet,
-because the link's n-grams are louder than the two real words next to it.
+**Natural contamination.** Real text isn't sterile. A Russian tweet has "iPhone" and "Wildberries" in Latin script,
+@mentions, links and emoji in it, and it is still Russian. This isn't the garbage from the list above: garbage is a
+wrong label, text tagged with the wrong language, while here the label is right and the text is simply alive. Such
+examples must not be scrubbed out; on the contrary, they have to be in the training data. A detector that has only
+seen clean sentences fails on the first tweet with a link at the end: the link has more n-grams than the two real
+words next to it, and it wins the vote.
 
 **Varied lengths.** On long text, detection is trivial, there are more than enough differences; all the difficulty is
 concentrated in short fragments: a single word, a chat reply, a headline. If the training set consists of full sentences,
 the model simply isn't ready for the regime where mistakes cost the most. Lengths in the mix have to be distributed so that
 short fragments are represented honestly, not as random clippings of long ones.
 
-### Leipzig is lava
+### Leipzig is asbestos
 
 [Wortschatz / Leipzig](https://wortschatz.uni-leipzig.de) is the most popular source of openly available language corpora:
 hundreds of languages, a one-click download, and for decades the first answer to "where do I get data". That's exactly
@@ -222,8 +234,9 @@ Leipzig itself isn't a model of cleanliness either: its community crawls mix lan
 make up a sizable share of the corpora. For close pairs this is doubly dangerous: a Tajik corpus with Russian text mixed in
 isn't "a bit dirtier", it's a systematically shifted boundary between classes.
 
-Hence the title: Leipzig is lava. It's hot, convenient and it's everywhere; you step on it because everyone steps on it;
-and you find out about the damage once the foundation is already built. I scrubbed every trace of Leipzig out of all
+Hence the comparison: Leipzig is asbestos. Cheap and convenient, it went into everything for decades; the harm doesn't
+show up right away, and by the time it does, it's built into other people's walls and has to be removed from each
+building separately. I scrubbed every trace of Leipzig out of all
 the datasets that went into the mix; you won't find it in the sources table below.
 
 ## Data preparation
@@ -233,11 +246,13 @@ metrics and toward real text, and almost every one started not with an architect
 
 ### The recipe is code
 
-The training mix is assembled from a hundred sources: FineWeb-2, Hugging Face datasets, Tatoeba, parallel corpora,
+By recipe I mean the description of the training set: which sources to take, how many rows from each, which filters
+and limits to apply. From the recipe a program builds the mix, the set of rows with their language labels. The mix
+is assembled from a hundred sources: FineWeb-2, Hugging Face datasets, Tatoeba, parallel corpora,
 tweets, forums. Each source is a separate adapter with its own settings, and its output is cached. Duplicates are
 dropped (the source listed earlier wins), and a row goes into the train, validation or test split based on the hash
 of its text, so on any rebuild the same row ends up in the same split. Synthetic noise (@mentions, emoji, random
-casing, sentence fragments) is added to the training data only: the test set stays real. The whole build is recorded
+capitalization, sentence fragments) is added to the training data only: the test set stays real. The whole build is recorded
 in a manifest and reproduces with a single command. Without that, no claim about the data can be checked: "it got better"
 has to be something you can rebuild.
 
@@ -246,21 +261,26 @@ has to be something you can rebuild.
 No single filter does the job: each one catches what the previous one missed.
 
 **A judge model.** A row is dropped if the current model assigns it to a different language with at least 99.5% confidence.
-This is how I found 503 English pages inside the Cyrillic sections of FineWeb-2; because of them, English "translationese"
-text was voting for Bulgarian. The HPLT Tajik corpus turned out to be a third Uzbek.
+This is how I found 503 English pages inside the Cyrillic sections of FineWeb-2; because of them, the model was taking
+English text for Bulgarian. The HPLT Tajik corpus turned out to be a third Uzbek.
 
-**Latin script goes to fastText.** If a row with a Cyrillic label is written mostly in Latin script, there's no point
-asking my own model: it learned from that very contamination. Rows like that are judged by lid.176.
+**Latin script goes to fastText.** Sometimes a row is labelled with a Cyrillic language but written in Latin script,
+for example an English page that ended up in the Bulgarian section of a web corpus. There's no point asking my own
+model about it: it learned from that very data and got used to calling such English Bulgarian. So rows written mostly
+in Latin script are checked by an outside detector, fastText lid.176, which knows the big languages written in Latin script well.
 
-**The model doesn't judge twins.** Within groups of closely related languages (Russian, Ukrainian, Belarusian; Bulgarian,
-Macedonian, Serbian; the Turkic languages; the Permic languages), a confident prediction can't be trusted. The letter `җ`
-in a Bashkir row means it's Tatar text, but `ҡ` means it's genuine Bashkir that the model is confusing. Throw out the latter
-and you lose exactly the borderline examples the model uses to learn to tell the twins apart.
+**The model doesn't judge twins.** By twins I mean groups of closely related languages: Russian, Ukrainian and Belarusian;
+Bulgarian, Macedonian and Serbian; the Turkic languages; the Permic languages. Within such a group, a confident prediction
+can't be trusted. An example: in a Bashkir corpus, the model confidently calls two rows Tatar. One has the letter `җ`,
+which only Tatar uses: that really is foreign text. The other has `ҡ`, which Tatar doesn't have: that's genuine Bashkir,
+and the model got it wrong. A judge would throw out both, and with the second one go exactly the borderline examples
+the model uses to learn to tell the twins apart. So between twins, letters and words decide, not models.
 
 **Letters.** Spelling is what tells twins apart. In reliable Tajik texts the letter «ы» occurs 0.08% of the time,
 while in the Tajik section of MADLAD it's 3.7%: that's Russian text under a Tajik label. The Kyrgyz HPLT turned up Yakut
-ҕ and һ. But this filter has a limit: Uzbek and Chechen can't be separated from Russian by alphabet. The second level
-runs at mix-assembly time: using the letters that only one of the twins writes, it estimates what share of a row is
+ҕ and һ. That's how whole corpora get checked, but the check has a limit: Uzbek and Chechen can't be separated from
+Russian by alphabet. So letters are also checked in every row at mix-assembly time: using the letters that only one
+of the twins writes, the filter estimates what share of a row is
 written in each language, and drops the row only if it's mostly foreign. So a Russian article quoting something in
 Ukrainian stays, while a Ukrainian tweet labeled "Russian" goes. Links and @mentions aren't counted: the detector
 doesn't read them either.
@@ -282,7 +302,7 @@ called Russian: Twitter's detector was routinely mistaking short Ukrainian for R
 
 But the cleanup hit somewhere else. The channel supplied a noticeable share of short Russian replies, and after the filters
 there were a third fewer of them, so accuracy on short Russian dropped. The filter removed not just garbage but an entire
-register of text. What helped was replacement, not removal: the channel was taken out of the recipe entirely, leaving
+type of text: short conversational replies. What helped was replacement, not removal: the channel was taken out of the recipe entirely, leaving
 3,000 rows that the dictionary confidently considers Russian, and the freed-up space went to 12,000 short replies each from
 open dialogues, a chat and a forum.
 
@@ -294,7 +314,10 @@ open dialogues, a chat and a forum.
 | short Russian from ok.ru comments (in no mix) | 88.10% | 93.20% |
 | other languages misclassified as Russian (under 20 characters) | 0.85% | 0.25% |
 
-Hence the rule: a filter is surgery, and after surgery you have to close the wound. If cleaning cuts out a register,
+Both models here are scored on the same file: the test split minus the rows whose labels can't be verified. The final
+metrics below use the full test split, so the numbers there differ slightly.
+
+Hence the rule: a filter is surgery, and after surgery you have to close the wound. If cleaning cuts out a whole type of text,
 you have to bring it back from a clean source.
 
 ### Composition beats volume
@@ -307,8 +330,8 @@ collected the longest, most word-rich sentences (not a single row shorter than 4
 dropped. Coverage works as an admission filter, not as an optimization target.
 
 **Clean text hurts small languages.** 12,000 tidy encyclopedic rows for a small class is a bomb: accuracy on short,
-"wild" text dropped by up to 2.4 pp. Adding FineWeb-2 web text at five times the base volume made the result worse too.
-What matters is the register, not the class's share.
+"wild" text dropped by up to 2.4 <Term tip="Percentage point: the difference between two percentages. 95% to 93% is minus 2 pp.">pp</Term>. Adding FineWeb-2 web text at five times the base volume made the result worse too.
+What matters is the type of text, not the language's share of the set.
 
 **Literature.** *War and Peace* was detected as Tuvan 6.1% of the time: the word «князь» ("prince") appeared in five
 Russian training rows out of 16,000, and the small languages won on scraps of n-grams. A dedicated literature channel
@@ -328,7 +351,7 @@ short-reply referee set, 42 came from that very Twitter channel, mostly translit
 
 Now every row of the referee sets is excluded from all parts of the mix at build time, and COSMUS has been cleaned of
 Ukrainian rows. There's a subtler leak too: near-duplicates between train and test make up 2.83%, so a difference of
-a tenth of a percent on our own test set means nothing. Decisions are made on frozen external sets.
+a tenth of a percent on my own test set means nothing. Decisions are made on frozen external sets.
 
 ## What came out of it
 
@@ -345,14 +368,14 @@ Everything is open:
 
 ### Data
 
-The mix is built only from commercially compatible data: every NC-licensed or NC-derived upstream has been replaced or filtered out row by row. The full list of sources:
+The mix is built only from data that can be used commercially: every source with a non-commercial (NC) license, its own or inherited, has been replaced or filtered out row by row. The full list of sources:
 
 | Source | Languages | License |
 |---|---|---|
 | FineWeb-2 (`*_Cyrl`) + FineWeb `sample-10BT` | 21 Cyrillic + tat (Latn) + eng, spa, fra, por, deu | ODC-By-1.0 |
 | HPLT 2.0 (cleaned) | kir, tgk | CC0 |
 | Tatoeba (train remainder) | 26 languages | CC-BY 2.0 FR (attribution on every row) |
-| Glot500 (tat/tgk/sah/udm/tyv slices; uzn = Earthlings) | tat, tgk, sah, udm, tyv, uzn | per-source aggregate; NC/restricted slices cut out row by row |
+| Glot500 (tat/tgk/sah/udm/tyv slices; uzn = Earthlings) | tat, tgk, sah, udm, tyv, uzn | each sub-corpus has its own; NC and other restricted slices cut out row by row |
 | Wikipedia dumps (tt, ce, ky, tg) | tat, che, kir, tgk | CC-BY-SA 3.0 + GFDL |
 | MADLAD-400 (clean/noisy) | tyv, sah, che, kir, tgk | ODC-By-1.0 |
 | alifbank/Tajik | tgk | MIT |
@@ -381,8 +404,8 @@ The mix is built only from commercially compatible data: every NC-licensed or NC
 | fpaulino/portuguese-tweets + mteb/told-br | por | unstated* / CC-BY-SA 4.0 |
 | NLP-UniBW (German political tweets) | deu | unstated* |
 | pysentimiento/spanish-tweets | spa | unstated* |
-| Wikisource (Russian literature lane) | rus | CC-BY-SA 4.0 |
-| FineWeb-2 `_removed` (hard negatives) | 12 configs | inherits ODC-By-1.0 |
+| Wikisource (Russian literature) | rus | CC-BY-SA 4.0 |
+| FineWeb-2 `_removed` (the rejected part, as hard examples) | 12 languages | inherits ODC-By-1.0 |
 
 \* "Unstated" means the dataset card has no machine-readable license. There are no NC licenses in the mix: in place of the mteb Macedonian tweets (CC-BY-NC-SA) and the Leipzig corpora, I use DGurgurov/MADLAD/HPLT.
 
@@ -391,22 +414,25 @@ The mix is built only from commercially compatible data: every NC-licensed or NC
 Each referee set is a separate operating regime, and I put them side by side because an average over all of them
 masks the main thing: where exactly the model wins and loses. fastText lid.176 is evaluated on the subset of languages
 present in its class list (24 of 30); GlotLID on full coverage, with its "language + script" classes mapped
-to ours.
+to spellman's.
 
 | set | mode | spellman | GlotLID v3 | fastText lid.176 |
 |---|---|---|---|---|
 | held-out mix (718,647, test split after the filters) | text | **98.74%** | 92.92% | 81.97% |
-| Tatoeba (37,051, held-out sentences) | word / pair / triple | **72.04 / 89.78 / 95.37** | 43.9 / 79.3 / 91.9 | 59.0 / 79.0 / 87.9 |
-| Tatoeba (37,051, held-out sentences) | text | 99.08% | **99.25%** | 94.90% |
-| Russian tweets (2,606, wild register, verified labels) | text | **96.55%** | 82.73% | 90.41% |
+| Tatoeba (37,051 held-out sentences) | word / pair / triple | **72.04 / 89.78 / 95.37** | 43.9 / 79.3 / 91.9 | 59.0 / 79.0 / 87.9 |
+| Tatoeba (37,051 held-out sentences) | text | 99.08% | **99.25%** | 94.90% |
+| Russian tweets (2,606, "wild" text, verified labels) | text | **96.55%** | 82.73% | 90.41% |
 | COSMUS (2,713, wild Russian: Telegram/reviews, hand-labeled) | text | 99.15% | 98.82% | **99.37%** |
 | short replies (574, ≤19 characters, certified by spelling) | text | **95.82%** | 71.25% | 84.32% |
 | literary Russian (2,000 sentences from a held-out novel) | text | 98.40% | — | — |
 
-How to read the table. Tatoeba is clean sentences; these 37,000 are excluded from training, though the rest of Tatoeba
-is in the mix. Here GlotLID comes out on top thanks to
+How to read the table. [Tatoeba](https://tatoeba.org) is an open database of short, tidy sentences with translations
+into hundreds of languages. I set aside 37,051 of its sentences in spellman's languages as a referee set: they never go into
+training, though Tatoeba's other sentences are in the training set. The "word / pair / triple" mode uses the same sentences cut
+into fragments of one, two and three words: it shows how much text a detector needs. A single word is the hardest mode,
+and 72% there is the best result of the three. Here GlotLID comes out on top thanks to
 the sheer volume of its data, and its 99.25% is the honest ceiling for this regime. But the "wild" rows (Russian tweets
-with @mentions, links and Latin-script inserts, Telegram and reviews with hand labels) are a register that simply doesn't
+with @mentions, links and Latin-script inserts, Telegram and reviews with hand labels) are text that simply doesn't
 exist in clean corpora, and there the picture flips: on tweets spellman leads GlotLID by almost 14 points and lid.176 by six. On COSMUS all
 three hit a ceiling around 99%, and lid.176 is slightly ahead there. Short replies are a pain of their own:
 they can't be certified by models (a soft consensus of judges itself confuses short Ukrainian with Russian), so each
@@ -482,41 +508,63 @@ ordinary word. Everything except ordinary words becomes a single placeholder tok
 a handful of identical features instead of a hundred-plus n-grams of its own, and no longer shouts over the two real words
 next to it. This step alone raised accuracy on Russian tweets from 72.5% to 92.4%.
 
+In the same pass, the detector counts which scripts the letters belong to. Japanese, Chinese, Hindi and
+Arabic are the only languages of the 30 with a script of their own: no other language on the list writes kana, Chinese
+characters, Devanagari or Arabic script. So here the script itself is the answer: kana means Japanese, a majority of
+Chinese characters means Chinese. Texts like these get their language immediately and never reach the model. Building
+n-grams for them would be not just unnecessary but harmful: Chinese and Japanese have thousands of characters and no
+spaces between words, and their n-grams would take table space that the close Cyrillic languages need, for an answer
+that is already known.
+
 An ordinary word is broken into character n-grams from one to five characters long, with word-start and word-end markers.
-Each character takes 21 bits, so the last three characters fit in a 64-bit register whole: keys for n-grams of up
-to three characters are masks over the register, and 4- and 5-grams take the whole register. Shift the register by one
-character, apply the masks, get the keys, with no strings and no allocations. On top of these
+No strings are built for them: characters are shifted into a 64-bit number one by one. Each new character shifts the
+number by 21 bits (enough for any Unicode character) and lands at its end, so the number always holds the last three
+characters. A unigram, bigram and trigram are its lowest 21, 42 and 63 bits, cut out with a mask; 4- and 5-grams take
+the whole number. That number is the n-gram's key. No strings, no allocations, just a shift and a mask. On top of the n-grams
 come the whole word and the pair of adjacent words: close languages share an alphabet but differ in vocabulary, and words
 have something to say where the n-grams coincide.
 
-Along the way, in the same pass, the detector counts the scripts of the letters. Kana means Japanese, a majority of Han
-characters means Chinese, and Devanagari and Arabic script are unambiguous among the supported languages: Hindi and Arabic.
-Texts like these get their answer immediately and never reach the model.
+<CharPacking caption="N-gram keys are masks of a single 64-bit number: no strings are built, nothing is allocated." />
 
 The keys are hashed into 2¹⁸ (262,144) table rows, and one more bit of the hash gives the sign with which the key enters
 the sum: that way collisions cancel each other out on average instead of piling up. Hashing runs as a separate pass over
 the key array, a plain loop that the compiler turns into vector instructions on its own (NEON on ARM, AVX2 on x86 when
 building for a modern CPU).
 
-**Folding.** The model trains like fastText: each row has its own 128-dimensional embedding, the text's embeddings
-are averaged, and a linear layer turns the average into 30 scores, one per language. But averaging and the linear layer
-commute: `mean(E[t])·W = mean(E[t]·W)`. So after training you can compute `P = E·W` once, a table in which each row
-already holds that row's contribution to every language's score. Inference becomes adding up table rows: no embeddings,
-no matrix multiplication, 30 numbers per token instead of 128.
+**Folding.** The model trains like fastText. Every n-gram of the text has a row in the embedding table: 128 numbers.
+The rows of all the text's n-grams are averaged, and a linear layer, a multiplication by a 128 × 30 matrix W, turns
+the average into 30 scores, one per language. But averaging and then multiplying by W is the same as multiplying every
+row by W first and averaging after. So after training you can multiply every row of the table by W once and store the
+result: for each n-gram, 30 ready numbers, its contribution to every language's score.
 
-**int8.** The table is stored in int8 with one scale per language. The column scale factors out of the sum
-(`Σ s_c·q = s_c·Σ q`), so rows are added as integers, exactly, in i32, and the scale is applied once per document.
-The hash sign costs nothing either: the table is stored doubled, `[q; −q]`, and the sign just picks a half.
+<FoldDiagram caption="Folding: the multiplication by W moves out of every request into a single step after training." />
+
+Inference becomes adding up ready rows: no embeddings, no matrix multiplication, 30 numbers per n-gram instead of 128.
+
+**int8.** Every number in the table is stored as an integer from −127 to 127 (int8), and the real value is that integer
+times a scale, one per language. Since the scale is shared by the whole column, it can be taken outside the sum: rows
+are added as integers, exactly, in a 32-bit integer, and the sum is multiplied by the scale once per document. The hash
+sign costs nothing either: in memory the table is stored twice, with a plus and a minus sign, and the sign just picks
+the copy.
 The result: the model file weighs 7.9 MB (the doubled table is only built in memory), half the size of f16, with the same accuracy (±0.02 pp) and roughly 1.4 times faster.
 
 **The svod plan.** Gathering the rows and summing them isn't done by a hand-written loop but by a compiled plan from
-[svod](/en/blog/svod-intro/), my tensor compiler. The plan is built for fixed sizes, K tokens per document and a batch of
+[svod](/en/blog/svod-intro/), my tensor compiler. The plan is built for fixed sizes, K <Term tip="A token is the key of one feature: an n-gram, a word or a word pair. An average document has about 700.">tokens</Term> per document and a batch of
 4,096 documents, and the compiler specializes every loop for them. So that short texts don't pay for K = 1,024, there are
 three plans, K = 64, 256 and 1,024, and a batch goes to the smallest one that fits its longest document; a document longer
 than K is cut into chunks whose sums are added together, with no truncation. A couple of small details paid off big.
-Explicitly bounding the indices by the table size let LLVM drop the bounds checks and fuse the int8 widening with the
+Explicitly bounding the indices by the table size let <Term tip="The compiler infrastructure rustc and svod are built on: it turns intermediate code into machine instructions.">LLVM</Term> drop the bounds checks and fuse the int8 widening with the
 addition into a single instruction (`saddw` on NEON): 79 → 50 instructions per token, and the kernel got 20–27% faster.
-Padding a row from 30 to 32 bytes bought another 10–16%: a row like that never straddles a cache-line boundary.
+Padding a row from 30 to 32 bytes bought another 10–16%: a row like that never straddles a <Term tip="A cache line is the 64-byte chunk the CPU reads memory in. A row across two lines costs two reads instead of one.">cache-line</Term> boundary.
+
+Why svod here and not plain Rust? K is chosen when the model loads, not when the program is built. To the Rust
+compiler it's just a variable: it can't tailor a loop of length K to a specific value, and it picks vector instructions
+for the oldest CPU the binary is built for. To get the same speed in plain Rust, you'd have to write a separate implementation
+of the kernel by hand for every value of K and every instruction set (NEON, AVX2, AVX-512), and pick the right
+implementation yourself at run time.
+Or live with slower code. svod does this for me: the plan is compiled at load time for the chosen K and for the device
+it runs on (a CPU, Metal, CUDA or AMD), and the schedule search (<Term tip="BEAM is a search over variants: svod tries different loop layouts, times each one on this hardware and keeps the fastest.">BEAM</Term>) picks the loop layout for that exact hardware.
+Changing K or the platform just means loading the model again, not rewriting the kernel.
 
 **All cores.** svod's multithreaded kernel pays a fixed price on every launch, about 85–90 µs on 14 threads.
 A different scheme works out better: each thread gets its own single-threaded copy of the plan. The copies share the weights,
@@ -524,13 +572,13 @@ and a single-threaded launch doesn't pay that price.
 
 Where the time ends up going: on a single thread, about 60% is feature preparation (word classes, n-grams, scripts,
 hashing) and about 40% is the svod plan. An average document has about 700 tokens, so gathering a table row and adding it
-costs roughly a nanosecond and a half per token. The model itself needs next to nothing per document; the most expensive
+costs roughly two nanoseconds per token. The model itself needs next to nothing per document; the most expensive
 part is reading the text.
 
 ### Performance
 
 The target was set by whichlang: a few microseconds per document. All detectors were measured on the same file
-(the held-out mix, 368,507 documents), on an Apple M4 Max, single-threaded, the way whichlang and lingua run:
+(the held-out mix from an earlier version of the dataset, 368,507 documents), on an Apple M4 Max, single-threaded, the way whichlang and lingua run:
 
 | detector | classes | latency | documents per second per core |
 |---|---|---|---|
@@ -541,9 +589,9 @@ The target was set by whichlang: a few microseconds per document. All detectors 
 
 whichlang is still the fastest, roughly 2.8 times faster than my batch mode. Largely that's the flip side of what
 I described above: a Cyrillic character gives whichlang two coarse features, while spellman gets up to five n-grams
-plus word features, about 700 features per document. It also answers the question "why write your own at all": lingua,
-with accuracy on close pairs comparable to mine, is roughly 60 times slower, and whichlang can't handle 20 of the 30 languages.
+plus word features, about 700 features per document. It also answers the question "why write your own at all": lingua
+is roughly 60 times slower and noticeably worse on short text (80.8% vs 95.1% on rows under 20 characters), and whichlang can't handle 20 of the 30 languages.
 
 On all cores (14 threads, each with its own copy of the plan over shared weights), batch mode gets through the same file
 at ~0.47 µs per document, about 2.1 million documents per second; whichlang in the same setup does ~0.14 µs. Everything described in the previous section together made the detector twice as fast:
-from 6.6 to 3.3 µs per document on a single thread, and from 0.92 to 0.47 µs on all cores.
+batch mode went from 6.6 to 3.3 µs per document on a single thread, and from 0.92 to 0.47 µs on all cores.
