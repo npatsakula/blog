@@ -538,6 +538,15 @@ Explicitly bounding the indices by the table size let LLVM drop the bounds check
 addition into a single instruction (`saddw` on NEON): 79 → 50 instructions per token, and the kernel got 20–27% faster.
 Padding a row from 30 to 32 bytes bought another 10–16%: a row like that never straddles a cache-line boundary.
 
+Why svod here and not plain Rust? K is chosen when the model loads, not when the program is built. To the Rust
+compiler it's just a variable: it can't tailor a loop of length K to a specific value, and it picks vector instructions
+for the oldest CPU the binary is built for. To get the same speed in plain Rust, you'd have to write a separate implementation
+of the kernel by hand for every value of K and every instruction set (NEON, AVX2, AVX-512), and pick the right
+implementation yourself at run time.
+Or live with slower code. svod does this for me: the plan is compiled at load time for the chosen K and for the device
+it runs on (a CPU, Metal, CUDA or AMD), and the schedule search (BEAM) picks the loop layout for that exact hardware.
+Changing K or the platform just means loading the model again, not rewriting the kernel.
+
 **All cores.** svod's multithreaded kernel pays a fixed price on every launch, about 85–90 µs on 14 threads.
 A different scheme works out better: each thread gets its own single-threaded copy of the plan. The copies share the weights,
 and a single-threaded launch doesn't pay that price.
